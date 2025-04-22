@@ -344,73 +344,7 @@ function setupLoginLogout() {
     }
 }
 
-function initializeDefaultProducts() {
-    try {
-        const products = JSON.parse(localStorage.getItem('products'));
-        if (products === null || products.length === 0) { // Initialize if products is null or empty
-            const defaultProducts = [
-                {
-                    id: "1",
-                    name: "Stüssy Forest Green Oversized",
-                    price: 49.99,
-                    image: "assets/pro10.jpg",
-                    sizes: { S: 10, M: 10, L: 10, XL: 10 },
-                    category: "T-Shirts",
-                    description: "Premium quality oversized t-shirt",
-                    featured: true,
-                    deleted: false
-                },
-                {
-                    id: "2",
-                    name: "Running Shoes Pro",
-                    price: 89.99,
-                    image: "assets/shoes.jpg",
-                    sizes: { 8: 5, 9: 5, 10: 5, 11: 5 },
-                    category: "Shoes",
-                    description: "Comfortable running shoes",
-                    featured: true,
-                    deleted: false
-                },
-                {
-                    id: "3",
-                    name: "Off-White T-Shirt",
-                    price: 59.99,
-                    image: "assets/pro7.jpg",
-                    sizes: { S: 5, M: 5, L: 5 },
-                    category: "T-Shirts",
-                    description: "Limited edition designer t-shirt",
-                    featured: false,
-                    deleted: false
-                },
-                {
-                    id: "4",
-                    name: "Classic Denim Jeans",
-                    price: 79.99,
-                    image: "assets/jeans.jpg",
-                    sizes: { 28: 5, 30: 5, 32: 5, 34: 5 },
-                    category: "Jeans",
-                    description: "Classic blue denim jeans",
-                    featured: false,
-                    deleted: false
-                },
-                {
-                    id: "5",
-                    name: "Casual Shorts",
-                    price: 39.99,
-                    image: "assets/shorts.jpg",
-                    sizes: { S: 5, M: 5, L: 5 },
-                    category: "Shorts",
-                    description: "Comfortable casual shorts",
-                    featured: false,
-                    deleted: false
-                }
-            ];
-            localStorage.setItem('products', JSON.stringify(defaultProducts));
-        }
-    } catch (error) {
-        console.error('Error initializing default products:', error);
-    }
-}
+
 
 function displayActiveFlashSales() {
     try {
