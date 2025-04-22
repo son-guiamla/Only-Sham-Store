@@ -316,6 +316,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     loadCartItems();
     updateCartCount();
+    setupLoginLogout();
 
     // Clean up expired reservations periodically
     setInterval(cleanExpiredReservations, 60000);

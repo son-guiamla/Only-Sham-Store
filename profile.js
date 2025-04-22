@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load user data
     loadUserProfile();
     loadReservations();
+    setupLoginLogout();
 
     // Profile picture upload
     const profileUpload = document.getElementById('profile-upload');

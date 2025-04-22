@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updateCartCount();
     setupLoginLogout();
     displayActiveFlashSales();
+    setupLoginLogout();
     
     // Listen for changes in products data
     window.addEventListener('storage', function(e) {
@@ -377,7 +378,7 @@ function setupLoginLogout() {
         
         if (loggedInUser) {
             loginLink.textContent = 'Logout';
-            loginLink.href = '#';
+            loginLink.href = 'login.html';
             loginLink.onclick = function(e) {
                 e.preventDefault();
                 localStorage.removeItem('loggedInUser');

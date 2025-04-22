@@ -185,13 +185,6 @@ function setupLoginLogout() {
                 };
             }
 
-            if (profileIcon) {
-                profileIcon.href = 'javascript:void(0)';
-                profileIcon.onclick = function() {
-                    alert(`Logged in as: ${loggedInUser.username}\nName: ${loggedInUser.fullname}\nPhone: ${loggedInUser.phone}`);
-                };
-            }
-
             if (addToCartButtons) {
                 addToCartButtons.forEach(button => {
                     button.disabled = false;
