@@ -64,8 +64,9 @@ function updateCartCount() {
  * Adds a product to the cart
  * @param {string} productId - The ID of the product to add
  * @param {string} size - The selected size of the product
+ * @param {string} status - The status of the reservation ('pending' or 'reserved')
  */
-function addToCart(productId, size) {
+function addToCart(productId, size, status = 'pending') {
     try {
         const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
         if (!loggedInUser) {
@@ -113,6 +114,8 @@ function addToCart(productId, size) {
             }
             
             users[userIndex].cart[existingItemIndex].quantity += 1;
+            users[userIndex].cart[existingItemIndex].status = status;
+            users[userIndex].cart[existingItemIndex].reservedAt = new Date().toISOString();
         } else {
             // Add new item to cart
             users[userIndex].cart.push({
@@ -122,7 +125,7 @@ function addToCart(productId, size) {
                 image: product.image || 'assets/default-product.jpg',
                 size,
                 quantity: 1,
-                status: 'pending',
+                status: status,
                 reservedAt: new Date().toISOString()
             });
         }
@@ -146,8 +149,8 @@ function addToCart(productId, size) {
         const button = document.querySelector(`.add-to-cart[data-id="${productId}"]`);
         if (button) {
             const originalText = button.textContent;
-            button.textContent = 'Added!';
-            button.style.backgroundColor = '#4CAF50';
+            button.textContent = status === 'reserved' ? 'Reserved!' : 'Added!';
+            button.style.backgroundColor = status === 'reserved' ? '#2196F3' : '#4CAF50';
             setTimeout(() => {
                 button.textContent = originalText;
                 button.style.backgroundColor = '';
@@ -369,20 +372,19 @@ function initQuickView() {
     });
     
     // Add to Cart button in modal
-    document.getElementById('addToCartBtn').addEventListener('click', function() {
-        const productId = this.getAttribute('data-id');
-        addToCart(productId, selectedQuickViewSize);
-        closeQuickView();
-    });
-
-    // Reserve button in modal
-    document.getElementById('reserveInModal').addEventListener('click', function() {
-        const productId = this.getAttribute('data-id');
-        addToCart(productId, selectedQuickViewSize);
-        closeQuickView();
-        window.location.href = 'cart.html';
-    });
+document.getElementById('addToCartBtn').addEventListener('click', function() {
+    const productId = this.getAttribute('data-id');
+    addToCart(productId, selectedQuickViewSize);
+    closeQuickView();
+});
 }
+    // Reserve button in modal
+document.getElementById('reserveInModal').addEventListener('click', function() {
+    const productId = this.getAttribute('data-id');
+    addToCart(productId, selectedQuickViewSize, 'reserved');
+    closeQuickView();
+    window.location.href = 'cart.html';
+});
 /* ======================
    INITIALIZATION
    ====================== */
