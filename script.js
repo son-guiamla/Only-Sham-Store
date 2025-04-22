@@ -160,53 +160,6 @@ function addToCart(productId, size) {
 }
 
 /* ======================
-   REVIEW SLIDER FUNCTIONS
-   ====================== */
-
-/**
- * Initializes the review slider functionality
- */
-function initReviewSlider() {
-    try {
-        const reviewCards = document.querySelectorAll('.review-card');
-        const prevBtn = document.querySelector('.prev-btn');
-        const nextBtn = document.querySelector('.next-btn');
-        let currentIndex = 0;
-
-        function showReview(index) {
-            reviewCards.forEach((card, i) => {
-                card.classList.toggle('active', i === index);
-            });
-        }
-
-        if (prevBtn) {
-            prevBtn.addEventListener('click', () => {
-                currentIndex = (currentIndex - 1 + reviewCards.length) % reviewCards.length;
-                showReview(currentIndex);
-            });
-        }
-
-        if (nextBtn) {
-            nextBtn.addEventListener('click', () => {
-                currentIndex = (currentIndex + 1) % reviewCards.length;
-                showReview(currentIndex);
-            });
-        }
-
-        if (reviewCards.length > 0) {
-            setInterval(() => {
-                currentIndex = (currentIndex + 1) % reviewCards.length;
-                showReview(currentIndex);
-            }, 5000);
-
-            showReview(currentIndex);
-        }
-    } catch (error) {
-        console.error('Error initializing review slider:', error);
-    }
-}
-
-/* ======================
    LOGIN/LOGOUT FUNCTIONS
    ====================== */
 
@@ -297,186 +250,71 @@ document.addEventListener('DOMContentLoaded', function() {
         // Initialize cart and reservation functionality
         setupLoginLogout();
         
-        // Initialize review slider if it exists
-        initReviewSlider();
-        
         // Initialize countdown timer if it exists
         initCountdownTimer();
     } catch (error) {
         console.error('Error initializing application:', error);
     }
 });
-/* ======================
-   QUICK VIEW FUNCTIONS
-   ====================== */
+// Add this to index.html or include it in your script.js
+document.addEventListener('DOMContentLoaded', function() {
+    loadFlashSale();
+});
 
-// Initialize Quick View Modal
-function initQuickView() {
-    const quickViewBtns = document.querySelectorAll('.quick-view');
-    const closeModal = document.querySelector('.close-modal');
-    const modal = document.getElementById('quickViewModal');
-    const addToCartBtn = document.getElementById('addToCartBtn');
+function loadFlashSale() {
+    const flashSales = JSON.parse(localStorage.getItem('flashSales')) || [];
+    const now = new Date();
     
-    // Open modal with product details
-    quickViewBtns.forEach(btn => {
-        btn.addEventListener('click', function() {
-            const productId = this.getAttribute('data-id');
-            const productCard = this.closest('.product-card');
-            openQuickView(productId, productCard);
-        });
+    // Find active flash sales (current time is between start and end time)
+    const activeFlashSales = flashSales.filter(sale => {
+        const start = new Date(sale.startTime);
+        const end = new Date(sale.endTime);
+        return now >= start && now <= end;
     });
     
-    // Close modal
-    closeModal.addEventListener('click', () => {
-        closeQuickView();
-    });
+    const container = document.getElementById('flash-sale-container');
+    if (!container) return;
     
-    // Close modal when clicking outside
-    window.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            closeQuickView();
-        }
-    });
+    container.innerHTML = '';
     
-    // Add to Cart button in modal
-    addToCartBtn.addEventListener('click', function() {
-        const productId = this.getAttribute('data-id');
-        const sizeSelect = document.querySelector('#quickViewSizes .size-option.selected');
-        const size = sizeSelect ? sizeSelect.getAttribute('data-size') : 'S';
-        
-        addToCart(productId, size);
-        closeQuickView();
-    });
-}
-
-// Open Quick View Modal
-function openQuickView(productId, productCard) {
-    const modal = document.getElementById('quickViewModal');
-    const products = JSON.parse(localStorage.getItem('products')) || [];
-    const product = products.find(p => p.id === productId);
-    
-    if (!product) {
-        alert('Product not found');
+    if (activeFlashSales.length === 0) {
+        // No active flash sales
+        container.style.display = 'none';
         return;
     }
     
-    // Check if product is in any active flash sale
-    const flashSales = JSON.parse(localStorage.getItem('flashSales')) || [];
-    const now = new Date();
-    let isOnSale = false;
-    let salePrice = product.price;
+    // Display the first active flash sale (you could modify to show multiple)
+    const sale = activeFlashSales[0];
+    const start = new Date(sale.startTime);
+    const end = new Date(sale.endTime);
     
-    for (const sale of flashSales) {
-        const start = new Date(sale.startTime);
-        const end = new Date(sale.endTime);
-        
-        if (now >= start && now <= end) {
-            // Check if product is included in this sale
-            if (sale.scope === 'all' || 
-                (sale.scope === 'products' && sale.products.includes(productId)) ||
-                (sale.scope === 'categories' && sale.categories.includes(product.category))) {
-                
-                isOnSale = true;
-                if (sale.discountType === 'percentage') {
-                    salePrice = product.price * (1 - sale.discountValue / 100);
-                } else {
-                    salePrice = Math.max(0, product.price - sale.discountValue);
-                }
-                break;
-            }
-        }
-    }
+    // Calculate time left
+    const diff = end - now;
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
     
-    // Update modal content
-    document.getElementById('quickViewTitle').textContent = product.name;
-    document.getElementById('quickViewImage').src = product.image || 'assets/default-product.jpg';
-    document.getElementById('quickViewDescription').textContent = product.description || 'No description available';
+    container.innerHTML = `
+        <div class="flash-sale-banner">
+            <div class="flash-sale-content">
+                <h2>${sale.name}</h2>
+                <p class="flash-sale-discount">
+                    ${sale.discountType === 'percentage' ? 
+                      `${sale.discountValue}% OFF` : 
+                      `₱${sale.discountValue} OFF`}
+                </p>
+                <p class="flash-sale-time">Ends in: ${days}d ${hours}h ${minutes}m</p>
+                <a href="#product-grid" class="flash-sale-button">Shop Now</a>
+            </div>
+        </div>
+    `;
     
-    // Display price with sale info if applicable
-    const priceElement = document.getElementById('quickViewPrice');
-    if (isOnSale) {
-        priceElement.innerHTML = `
-            <span style="text-decoration: line-through; color: var(--light-text); margin-right: 10px;">
-                ₱${product.price.toFixed(2)}
-            </span>
-            <span style="color: #ff4757; font-weight: bold;">
-                ₱${salePrice.toFixed(2)}
-            </span>
-        `;
-        document.getElementById('quickViewSaleBadge').style.display = 'block';
-    } else {
-        priceElement.textContent = `₱${product.price.toFixed(2)}`;
-        document.getElementById('quickViewSaleBadge').style.display = 'none';
-    }
-    
-    // Populate size options
-    const sizesContainer = document.getElementById('quickViewSizes');
-    sizesContainer.innerHTML = '';
-    
-    if (product.sizes) {
-        const availableSizes = Object.entries(product.sizes)
-            .filter(([_, quantity]) => quantity > 0)
-            .map(([size]) => size);
-        
-        if (availableSizes.length > 0) {
-            availableSizes.forEach(size => {
-                const sizeOption = document.createElement('div');
-                sizeOption.className = 'size-option';
-                sizeOption.textContent = size;
-                sizeOption.setAttribute('data-size', size);
-                sizeOption.addEventListener('click', function() {
-                    document.querySelectorAll('#quickViewSizes .size-option').forEach(opt => {
-                        opt.classList.remove('selected');
-                    });
-                    this.classList.add('selected');
-                });
-                
-                // Select first size by default
-                if (availableSizes.indexOf(size) === 0) {
-                    sizeOption.classList.add('selected');
-                }
-                
-                sizesContainer.appendChild(sizeOption);
-            });
-        } else {
-            sizesContainer.innerHTML = '<p>No sizes available</p>';
-        }
-    } else {
-        sizesContainer.innerHTML = '<p>No size information</p>';
-    }
-    
-    // Set product ID on Add to Cart button
-    addToCartBtn.setAttribute('data-id', productId);
-    
-    // Show modal
-    modal.style.display = 'block';
-    document.body.style.overflow = 'hidden';
+    container.style.display = 'block';
 }
 
-// Close Quick View Modal
-function closeQuickView() {
-    document.getElementById('quickViewModal').style.display = 'none';
-    document.body.style.overflow = 'auto';
-}
-
-// Update your DOMContentLoaded event to include initQuickView
-document.addEventListener('DOMContentLoaded', function() {
-    try {
-        // Initialize general utilities
-        initSmoothScrolling();
-        
-        // Initialize cart and reservation functionality
-        setupLoginLogout();
-        
-        // Initialize review slider if it exists
-        initReviewSlider();
-        
-        // Initialize countdown timer if it exists
-        initCountdownTimer();
-        
-        // Initialize Quick View
-        initQuickView();
-    } catch (error) {
-        console.error('Error initializing application:', error);
+// Listen for flash sale updates from admin
+window.addEventListener('storage', function(e) {
+    if (e.key === 'flashSales') {
+        loadFlashSale();
     }
 });
