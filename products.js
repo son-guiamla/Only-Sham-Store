@@ -66,7 +66,7 @@ function loadProducts(category = null) {
         productGrid.innerHTML = `<div class="empty">Error loading products. Please try again.</div>`;
     }
 }
-
+// Add this function if it doesn't exist
 function initializeDefaultProducts() {
     try {
         let products = JSON.parse(localStorage.getItem('products'));
@@ -95,7 +95,8 @@ function initializeDefaultProducts() {
                     description: 'Modern slim fit jeans',
                     featured: true,
                     deleted: false
-                }
+                },
+                // Add more default products as needed
             ];
             
             localStorage.setItem('products', JSON.stringify(products));
@@ -104,7 +105,6 @@ function initializeDefaultProducts() {
         console.error('Error initializing default products:', error);
     }
 }
-
 function applyDiscounts(products) {
     try {
         const flashSales = JSON.parse(localStorage.getItem('flashSales')) || [];
@@ -252,6 +252,148 @@ function renderProducts(products) {
         });
     });
 }
+function addToCart(productId, size) {
+    try {
+        const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
+        if (!loggedInUser) {
+            const confirmLogin = confirm('You need to login to add items to cart. Would you like to login now?');
+            if (confirmLogin) {
+                window.location.href = 'login.html';
+            }
+            return;
+        }
+        
+        const products = JSON.parse(localStorage.getItem('products')) || [];
+        const product = products.find(p => p.id === productId);
+        
+        if (!product) {
+            alert('Product not found');
+            return;
+        }
+        
+        // Check if size is available
+        if (!product.sizes || !product.sizes[size] || product.sizes[size] <= 0) {
+            alert('Selected size is out of stock');
+            return;
+        }
+        
+        // Get or initialize user's cart
+        const users = JSON.parse(localStorage.getItem('users')) || [];
+        const userIndex = users.findIndex(u => u.username === loggedInUser.username);
+        
+        if (userIndex === -1) return;
+        
+        if (!users[userIndex].cart) {
+            users[userIndex].cart = [];
+        }
+        
+        // Check if product already in cart
+        const existingItemIndex = users[userIndex].cart.findIndex(
+            item => item.productId === productId && item.size === size && (!item.status || item.status === 'pending')
+        );
+        
+        if (existingItemIndex !== -1) {
+            // Check if we have enough stock
+            if (product.sizes[size] <= users[userIndex].cart[existingItemIndex].quantity) {
+                alert(`Only ${product.sizes[size]} items left in stock for this size!`);
+                return;
+            }
+            
+            users[userIndex].cart[existingItemIndex].quantity += 1;
+        } else {
+            // Add new item to cart
+            users[userIndex].cart.push({
+                productId,
+                name: product.name,
+                price: product.price,
+                image: product.image || 'assets/default-product.jpg',
+                size,
+                quantity: 1,
+                status: 'pending',
+                reservedAt: new Date().toISOString()
+            });
+        }
+        
+        // Update product stock
+        const productIndex = products.findIndex(p => p.id === productId);
+        if (productIndex !== -1 && products[productIndex].sizes) {
+            products[productIndex].sizes[size] -= 1;
+            localStorage.setItem('products', JSON.stringify(products));
+        }
+        
+        localStorage.setItem('users', JSON.stringify(users));
+        
+        // Update loggedInUser data
+        const updatedUser = users[userIndex];
+        localStorage.setItem('loggedInUser', JSON.stringify(updatedUser));
+        
+        updateCartCount();
+        loadProducts(); // Refresh product display
+        
+        // Show success feedback
+        const button = document.querySelector(`.add-to-cart[data-id="${productId}"]`);
+        if (button) {
+            const originalText = button.textContent;
+            button.textContent = 'Added!';
+            button.style.backgroundColor = '#4CAF50';
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.style.backgroundColor = '';
+            }, 2000);
+        }
+    } catch (error) {
+        console.error('Error adding to cart:', error);
+        alert('An error occurred while adding to cart');
+    }
+}
+
+function updateCartCount() {
+    try {
+        const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
+        if (!loggedInUser) return;
+        
+        const users = JSON.parse(localStorage.getItem('users')) || [];
+        const user = users.find(u => u.username === loggedInUser.username);
+        
+        if (user && user.cart) {
+            const totalItems = user.cart.filter(item => !item.status || item.status === 'pending')
+                                      .reduce((sum, item) => sum + item.quantity, 0);
+            const cartCountElements = document.querySelectorAll('#cart-count');
+            cartCountElements.forEach(element => {
+                element.textContent = totalItems;
+            });
+        }
+    } catch (error) {
+        console.error('Error updating cart count:', error);
+    }
+}
+
+function setupLoginLogout() {
+    try {
+        const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
+        const loginLink = document.getElementById('login-logout-link');
+        
+        if (!loginLink) return;
+        
+        if (loggedInUser) {
+            loginLink.textContent = 'Logout';
+            loginLink.href = '#';
+            loginLink.onclick = function(e) {
+                e.preventDefault();
+                localStorage.removeItem('loggedInUser');
+                window.location.href = 'index.html';
+            };
+        } else {
+            loginLink.textContent = 'Login';
+            loginLink.href = 'login.html';
+            loginLink.onclick = null;
+        }
+    } catch (error) {
+        console.error('Error setting up login/logout:', error);
+    }
+}
+
+
 
 function displayActiveFlashSales() {
     try {
@@ -310,7 +452,7 @@ function displayActiveFlashSales() {
                             <span class="timer-label">Seconds</span>
                         </div>
                     </div>
-                    <a href="#shop" class="shop-now-btn">Shop Now</a>
+                    <a href="#product-grid" class="shop-now-btn">Shop Now</a>
                 </div>
             `;
         });

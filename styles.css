@@ -2024,51 +2024,97 @@
         bottom: 60px;
     }
 }
-/* Flash Sale Section */
+/* Flash Sale Styles */
 .flash-sale-section {
-  background-color: #ff6b6b;
+  background-color: #ff5252;
   color: white;
-  padding: 30px 0;
-  margin: 40px 0;
+  padding: 2rem;
+  margin: 2rem 0;
+  text-align: center;
+  border-radius: 8px;
+}
+
+.flash-sale-active {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.flash-sale-active h1 {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+}
+
+.flash-sale-active h2 {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+}
+
+.discount {
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin-bottom: 1rem;
+}
+
+.time-left {
+  font-size: 1.2rem;
+  margin-bottom: 0.5rem;
+}
+
+.countdown-timer {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.timer-box {
+  background: rgba(0, 0, 0, 0.2);
+  padding: 0.5rem 1rem;
+  border-radius: 5px;
+  min-width: 80px;
+}
+
+.timer-box span {
+  display: block;
   text-align: center;
 }
 
-.flash-sale-banner {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 20px;
-}
-
-.flash-sale-content h2 {
+.timer-box .days, 
+.timer-box .hours, 
+.timer-box .minutes, 
+.timer-box .seconds {
   font-size: 2rem;
-  margin-bottom: 10px;
-}
-
-.flash-sale-discount {
-  font-size: 1.5rem;
   font-weight: bold;
-  margin-bottom: 15px;
 }
 
-.flash-sale-time {
-  font-size: 1.2rem;
-  margin-bottom: 20px;
+.timer-box .timer-label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
 }
 
-.flash-sale-button {
+.shop-now-btn {
   display: inline-block;
-  background-color: white;
-  color: #ff6b6b;
-  padding: 12px 30px;
-  border-radius: 30px;
-  text-decoration: none;
+  background: white;
+  color: #ff5252;
+  padding: 0.8rem 2rem;
+  border-radius: 50px;
   font-weight: bold;
-  transition: all 0.3s;
+  text-decoration: none;
+  margin-top: 1rem;
+  transition: all 0.3s ease;
 }
 
-.flash-sale-button:hover {
-  background-color: #f0f0f0;
-  transform: translateY(-2px);
+.shop-now-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.no-flash-sale {
+  padding: 2rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
 }
 /* Admin Checkbox Styles */
 .admin-checkbox-item {
