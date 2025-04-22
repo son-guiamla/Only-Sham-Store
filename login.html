@@ -439,18 +439,15 @@
     let resetPhone = '';
     let currentUserToReset = null;
 
-    function switchTab(tab) {
-      document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
-      document.querySelector(`.auth-tab:nth-child(${tab === 'login' ? 1 : 2})`).classList.add('active');
-      document.getElementById(`${tab}-form`).classList.add('active');
+    // Utility functions
+    function showError(id, message) {
+      const el = document.getElementById(id);
+      el.textContent = message;
+      el.style.display = 'block';
     }
 
-    function togglePassword(inputId, icon) {
-      const input = document.getElementById(inputId);
-      input.type = input.type === 'password' ? 'text' : 'password';
-      icon.classList.toggle('fa-eye');
-      icon.classList.toggle('fa-eye-slash');
+    function hideError(id) {
+      document.getElementById(id).style.display = 'none';
     }
 
     function validateEmail(email) {
@@ -466,20 +463,28 @@
       return password.length >= 6;
     }
 
-    function showError(id, message) {
-      const el = document.getElementById(id);
-      el.textContent = message;
-      el.style.display = 'block';
+    // Tab switching
+    function switchTab(tab) {
+      document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
+      document.querySelector(`.auth-tab:nth-child(${tab === 'login' ? 1 : 2})`).classList.add('active');
+      document.getElementById(`${tab}-form`).classList.add('active');
     }
 
-    function hideError(id) {
-      document.getElementById(id).style.display = 'none';
+    // Password visibility toggle
+    function togglePassword(inputId, icon) {
+      const input = document.getElementById(inputId);
+      input.type = input.type === 'password' ? 'text' : 'password';
+      icon.classList.toggle('fa-eye');
+      icon.classList.toggle('fa-eye-slash');
     }
 
+    // Authentication functions
     function login() {
       const usernameOrEmail = document.getElementById('login-username').value.trim();
       const password = document.getElementById('login-password').value.trim();
       const adminCode = document.getElementById('admin-code')?.value.trim();
+      
       hideError('login-username-error');
       hideError('login-password-error');
       hideError('admin-code-error');
@@ -550,7 +555,6 @@
 
       const users = JSON.parse(localStorage.getItem('users')) || [];
       
-      // Check for duplicates
       if (users.some(u => u.username === username)) {
         showError('signup-username-error', 'Username already taken');
         return;
@@ -600,7 +604,7 @@
       }
     }
 
-    // Forgot Password Functions
+    // Forgot Password functions
     function showForgotPasswordModal() {
       document.getElementById('forgotPasswordModal').style.display = 'flex';
       document.getElementById('forgot-password-step1').style.display = 'block';
@@ -623,7 +627,6 @@
         return showError('forgot-phone-error', 'Please enter a valid phone number');
       }
 
-      // Check if phone exists in users
       const users = JSON.parse(localStorage.getItem('users')) || [];
       const user = users.find(u => u.phone === phone);
       
@@ -633,23 +636,15 @@
 
       currentUserToReset = user;
       resetPhone = phone;
-      
-      // Generate a 6-digit OTP (in a real app, this would be sent via SMS)
       currentOTP = Math.floor(100000 + Math.random() * 900000).toString();
-      console.log(`OTP for ${phone}: ${currentOTP}`); // For demo purposes only
+      console.log(`OTP for ${phone}: ${currentOTP}`);
       
-      // Show OTP input step
       document.getElementById('forgot-password-step1').style.display = 'none';
       document.getElementById('forgot-password-step2').style.display = 'block';
       
-      // Mask the phone number for display
       const maskedPhone = phone.substring(0, 3) + '****' + phone.substring(7);
       document.getElementById('phone-mask').textContent = maskedPhone;
-      
-      // Focus first OTP input
       document.querySelector('.otp-input').focus();
-      
-      // Setup OTP input auto-focus
       setupOTPInputs();
     }
 
@@ -694,17 +689,14 @@
         return showError('otp-error', 'Invalid OTP. Please try again');
       }
       
-      // OTP verified, show password reset form
       document.getElementById('forgot-password-step2').style.display = 'none';
       document.getElementById('forgot-password-step3').style.display = 'block';
     }
 
     function resendOTP() {
-      // Generate a new OTP
       currentOTP = Math.floor(100000 + Math.random() * 900000).toString();
-      console.log(`New OTP for ${resetPhone}: ${currentOTP}`); // For demo purposes only
+      console.log(`New OTP for ${resetPhone}: ${currentOTP}`);
       
-      // Clear OTP inputs
       const otpInputs = document.querySelectorAll('.otp-input');
       otpInputs.forEach(input => input.value = '');
       otpInputs[0].focus();
@@ -727,15 +719,12 @@
         return showError('confirm-password-error', 'Passwords do not match');
       }
       
-      // Update user's password
       const users = JSON.parse(localStorage.getItem('users')) || [];
       const userIndex = users.findIndex(u => u.phone === resetPhone);
       
       if (userIndex !== -1) {
         users[userIndex].password = newPassword;
         localStorage.setItem('users', JSON.stringify(users));
-        
-        // Show success and close modal
         alert('Password reset successfully! You can now login with your new password.');
         closeModal();
       } else {
@@ -743,10 +732,10 @@
       }
     }
 
+    // Initialize on page load
     window.onload = function() {
       initializeAdminUser();
       
-      // Check for banned user redirect
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('banned') === 'true') {
         document.getElementById('login-username').value = '';
@@ -763,7 +752,6 @@
         document.getElementById('admin-code-group').style.display = this.value.trim().toLowerCase() === 'admin' ? 'block' : 'none';
       });
       
-      // Close modal when clicking outside
       document.getElementById('forgotPasswordModal').addEventListener('click', function(e) {
         if (e.target === this) closeModal();
       });
