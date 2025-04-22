@@ -86,7 +86,37 @@
             <!-- Products will be loaded here by JavaScript -->
         </div>
     </section>
-
+ <!-- Product Detail Modal -->
+ <div id="productModal" class="modal">
+    <span class="close-modal">&times;</span>
+    <div class="modal-content">
+        <div class="product-detail">
+            <div class="product-detail-images">
+                <img id="modalProductImage" src="" alt="">
+                <div id="quickViewSaleBadge" class="product-badge" style="display: none;">Sale</div>
+            </div>
+            <div class="product-detail-info">
+                <h2 id="modalProductTitle">Product Title</h2>
+                <div class="product-price-large" id="modalProductPrice">₱0.00</div>
+                <p class="product-description" id="modalProductDescription">
+                    Product description will be loaded here.
+                </p>
+                <div class="product-options">
+                    <div class="option-group">
+                        <h4>Size</h4>
+                        <div class="size-options" id="quickViewSizes">
+                            <!-- Size options will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+                <div class="detail-actions">
+                    <button class="btn" id="reserveInModal">Reserve Now</button>
+                    <button class="btn" id="addToCartBtn" style="background-color: var(--secondary-color); color: var(--dark-color);">Add to Cart</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
     <!-- Footer Section -->
     <footer class="footer">
         <div class="footer-content">
