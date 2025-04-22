@@ -645,6 +645,7 @@ function saveProduct() {
             reader.onload = function(e) {
                 const imageUrl = e.target.result;
                 saveProductData(id, name, price, imageUrl, description, category, featured, sizeQuantities, products);
+                window.dispatchEvent(new Event('storage')); // Added here for image upload case
             };
             reader.onerror = function() {
                 alert('Error reading image file');
@@ -657,6 +658,7 @@ function saveProduct() {
                 imageUrl = products[id].image;
             }
             saveProductData(id, name, price, imageUrl, description, category, featured, sizeQuantities, products);
+            window.dispatchEvent(new Event('storage')); // Added here for non-image upload case
         }
     } catch (error) {
         console.error('Error saving product:', error);
@@ -681,9 +683,9 @@ function deleteProduct(id) {
             
             localStorage.setItem('products', JSON.stringify(products));
             localStorage.setItem('users', JSON.stringify(users));
+            window.dispatchEvent(new Event('storage')); // Added this line
             
             loadProducts();
-            window.dispatchEvent(new Event('storage'));
         } catch (error) {
             console.error('Error deleting product:', error);
         }

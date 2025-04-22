@@ -11,9 +11,6 @@ document.addEventListener('DOMContentLoaded', function() {
         category = 'Shoes';
     } else if (path.includes('shorts.html')) {
         category = 'Shorts';
-    } else if (path.includes('index.html')) {
-        // For main shop page, we'll handle featured products separately
-        category = null;
     }
     
     // Initialize default products if none exist
@@ -24,7 +21,6 @@ document.addEventListener('DOMContentLoaded', function() {
     updateCartCount();
     setupLoginLogout();
     displayActiveFlashSales();
-    setupLoginLogout();
     
     // Listen for changes in products data
     window.addEventListener('storage', function(e) {
@@ -46,7 +42,7 @@ function loadProducts(category = null) {
         products = products.filter(product => !product.deleted);
         
         // Filter by category if specified (not on main shop page)
-        if (category && !window.location.pathname.includes('index.html')) {
+        if (category) {
             products = products.filter(product => product.category === category);
         } else if (window.location.pathname.includes('index.html')) {
             // For main shop page, show featured products only
@@ -67,7 +63,7 @@ function loadProducts(category = null) {
         productGrid.innerHTML = `<div class="empty">Error loading products. Please try again.</div>`;
     }
 }
-// Add this function if it doesn't exist
+
 function initializeDefaultProducts() {
     try {
         let products = JSON.parse(localStorage.getItem('products'));
@@ -97,7 +93,28 @@ function initializeDefaultProducts() {
                     featured: true,
                     deleted: false
                 },
-                // Add more default products as needed
+                {
+                    id: 'prod3',
+                    name: 'Running Shoes',
+                    price: 1299.99,
+                    category: 'Shoes',
+                    image: 'assets/shoes.png',
+                    sizes: { '7': 8, '8': 10, '9': 12, '10': 6 },
+                    description: 'Comfortable running shoes',
+                    featured: true,
+                    deleted: false
+                },
+                {
+                    id: 'prod4',
+                    name: 'Casual Shorts',
+                    price: 499.99,
+                    category: 'Shorts',
+                    image: 'assets/short.png',
+                    sizes: { 'S': 10, 'M': 15, 'L': 8, 'XL': 5 },
+                    description: 'Comfortable casual shorts',
+                    featured: true,
+                    deleted: false
+                }
             ];
             
             localStorage.setItem('products', JSON.stringify(products));
@@ -106,6 +123,7 @@ function initializeDefaultProducts() {
         console.error('Error initializing default products:', error);
     }
 }
+
 function applyDiscounts(products) {
     try {
         const flashSales = JSON.parse(localStorage.getItem('flashSales')) || [];
@@ -253,6 +271,7 @@ function renderProducts(products) {
         });
     });
 }
+
 function addToCart(productId, size) {
     try {
         const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
@@ -393,8 +412,6 @@ function setupLoginLogout() {
         console.error('Error setting up login/logout:', error);
     }
 }
-
-
 
 function displayActiveFlashSales() {
     try {
