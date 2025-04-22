@@ -66,7 +66,45 @@ function loadProducts(category = null) {
         productGrid.innerHTML = `<div class="empty">Error loading products. Please try again.</div>`;
     }
 }
-
+// Add this function if it doesn't exist
+function initializeDefaultProducts() {
+    try {
+        let products = JSON.parse(localStorage.getItem('products'));
+        
+        // If no products exist or it's not an array, create default products
+        if (!products || !Array.isArray(products)) {
+            products = [
+                {
+                    id: 'prod1',
+                    name: 'Classic White T-Shirt',
+                    price: 299.99,
+                    category: 'T-Shirts',
+                    image: 'assets/Shirt.png',
+                    sizes: { 'S': 10, 'M': 15, 'L': 8, 'XL': 5 },
+                    description: 'A comfortable classic white t-shirt',
+                    featured: true,
+                    deleted: false
+                },
+                {
+                    id: 'prod2',
+                    name: 'Slim Fit Jeans',
+                    price: 799.99,
+                    category: 'Jeans',
+                    image: 'assets/jeans.svg',
+                    sizes: { '28': 5, '30': 8, '32': 10, '34': 7 },
+                    description: 'Modern slim fit jeans',
+                    featured: true,
+                    deleted: false
+                },
+                // Add more default products as needed
+            ];
+            
+            localStorage.setItem('products', JSON.stringify(products));
+        }
+    } catch (error) {
+        console.error('Error initializing default products:', error);
+    }
+}
 function applyDiscounts(products) {
     try {
         const flashSales = JSON.parse(localStorage.getItem('flashSales')) || [];
