@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Profile | Only@Sham</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="profile.css">
+    <link rel="stylesheet" href="styles.css">
+
+</head>
+<body>
+    <nav class="navbar">
+        <!-- Logo -->
+        <div class="logo">
+            <a href="index.html">Only@Sham</a>
+        </div>
+
+        <!-- Menu Links -->
+        <ul class="nav-links">
+            <li><a href="index.html#home">Home</a></li>
+            <li><a href="index.html#shop">Shop</a></li>
+            <li><a href="cart.html">Reservations</a></li>
+            <li><a href="index.html#about-us">About Us</a></li>
+            <li><a href="index.html#Contact">Contact</a></li>
+        </ul>
+
+        <!-- Icons -->
+        <div class="nav-icons">
+            <a href="cart.html" class="cart-icon"><i class="fas fa-shopping-cart"></i> <sup><span id="cart-count">0</span></sup></a>
+            
+            <div class="settings-icon" onclick="toggleSidebar()">
+                <i class="fas fa-ellipsis-v"></i>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="sidebar" id="sidebar">
+            <a href="#" class="close-btn" onclick="toggleSidebar()">&times;</a>
+            <a href="#" id="login-logout-link">Login</a>
+            <a href="#">Settings</a>
+            <a href="#">Help</a>
+        </div>
+    </nav>
+
+    <div class="profile-container">
+        <div class="profile-header">
+            <h1>My Profile</h1>
+        </div>
+
+        <div class="profile-content">
+            <div class="profile-sidebar">
+                <div class="profile-picture-container">
+                    <div class="profile-picture-wrapper">
+                        <img id="profile-picture" src="assets/default-profile.png" alt="Profile Picture">
+                        <label for="profile-upload" class="upload-btn">
+                            <i class="fas fa-camera"></i>
+                        </label>
+                        <input type="file" id="profile-upload" accept="image/*" style="display: none;">
+                    </div>
+                    <button id="remove-picture-btn" class="btn-secondary">Remove Picture</button>
+                </div>
+
+                <div class="profile-menu">
+                    <button class="profile-menu-btn active" data-section="personal-info">
+                        <i class="fas fa-user"></i> Personal Info
+                    </button>
+                    <button class="profile-menu-btn" data-section="security">
+                        <i class="fas fa-lock"></i> Security
+                    </button>
+                    <button class="profile-menu-btn" data-section="reservations">
+                        <i class="fas fa-shopping-bag"></i> My Reservations
+                    </button>
+                </div>
+            </div>
+
+            <div class="profile-details">
+                <div class="profile-section active" id="personal-info-section">
+                    <h2>Personal Information</h2>
+                    <form id="personal-info-form">
+                        <div class="form-group">
+                            <label for="full-name">Full Name</label>
+                            <input type="text" id="full-name" class="input-field" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="username">Username</label>
+                            <input type="text" id="username" class="input-field" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="email">Email</label>
+                            <input type="email" id="email" class="input-field" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="phone">Phone Number</label>
+                            <input type="tel" id="phone" class="input-field">
+                        </div>
+                        <div class="form-group">
+                            <label for="gender">Gender</label>
+                            <select id="gender" class="input-field">
+                                <option value="">Select Gender</option>
+                                <option value="male">Male</option>
+                                <option value="female">Female</option>
+                                <option value="other">Other</option>
+                                <option value="prefer-not-to-say">Prefer not to say</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn-primary">Save Changes</button>
+                    </form>
+                </div>
+
+                <!-- Security Section -->
+<div class="profile-section" id="security-section">
+    <h2>Security</h2>
+    <form id="security-form">
+        <div class="form-group">
+            <label for="current-password">Current Password</label>
+            <input type="password" id="current-password" class="input-field" required>
+        </div>
+        <div class="form-group">
+            <label for="new-password">New Password</label>
+            <input type="password" id="new-password" class="input-field" required>
+        </div>
+        <div class="form-group">
+            <label for="confirm-password">Confirm New Password</label>
+            <input type="password" id="confirm-password" class="input-field" required>
+        </div>
+        <button type="submit" class="btn-primary">Update Password</button>
+    </form>
+</div>
+
+                <!-- Reservations Section -->
+                <div class="profile-section" id="reservations-section">
+                    <h2>My Reservations</h2>
+                    <div class="reservations-list" id="reservations-list">
+                        <!-- Reservations will be loaded here -->
+                        <p class="empty-message">You have no active reservations.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <!-- Footer Links -->
+            <div class="footer-links">
+                <h3>Quick Links</h3>
+                <ul>
+                    <li><a href="#">Privacy Policy</a></li>
+                    <li><a href="#">Terms & Conditions</a></li>
+                    <li><a href="#">Return Policy</a></li>
+                </ul>
+            </div>
+
+            <!-- Social Media Icons -->
+            <div class="social-media">
+                <h3>Follow Us</h3>
+                <div class="social-icons">
+                    <a href="#" class="social-icon"><i class="fab fa-facebook-f"></i></a>
+                    <a href="#" class="social-icon"><i class="fab fa-instagram"></i></a>
+                    <a href="#" class="social-icon"><i class="fab fa-tiktok"></i></a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer Bottom -->
+        <div class="footer-bottom">
+            <p>&copy; 2023 Only@Sham. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script src="auth.js"></script>
+    <script src="profile.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

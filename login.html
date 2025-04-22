@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Login | Only@Sham</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"/>
+  <style>
+    :root {
+      --primary-color: #6c5ce7;
+      --secondary-color: #a29bfe;
+      --accent-color: #fd79a8;
+      --dark-color: #2d3436;
+      --light-color: #f5f6fa;
+      --success-color: #00b894;
+      --warning-color: #fdcb6e;
+      --error-color: #d63031;
+    }
+
+    * {
+      margin: 0; padding: 0;
+      box-sizing: border-box;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    body {
+      background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: var(--dark-color);
+    }
+
+    .auth-container {
+      background-color: white;
+      border-radius: 15px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      width: 90%;
+      max-width: 400px;
+      overflow: hidden;
+    }
+
+    .auth-header {
+      background: linear-gradient(to right, var(--primary-color), var(--accent-color));
+      color: white;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .auth-tabs {
+      display: flex;
+      justify-content: space-around;
+      margin-top: 15px;
+    }
+
+    .auth-tab {
+      padding: 10px 20px;
+      cursor: pointer;
+      border-radius: 30px;
+      font-weight: bold;
+    }
+
+    .auth-tab.active {
+      background-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .auth-forms {
+      padding: 25px;
+    }
+
+    .auth-form {
+      display: none;
+      animation: fadeIn 0.5s ease;
+    }
+
+    .auth-form.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+      position: relative;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 12px 40px 12px 15px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      font-size: 1rem;
+    }
+
+    .form-control:focus {
+      border-color: var(--primary-color);
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.2);
+    }
+
+    .btn {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+
+    .btn-primary {
+      background-color: var(--primary-color);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background-color: #5a4bd1;
+    }
+
+    .input-icon {
+      position: absolute;
+      right: 15px;
+      top: 40px;
+      color: #777;
+      cursor: pointer;
+      z-index: 2;
+    }
+
+    .password-toggle {
+      cursor: pointer;
+    }
+
+    .error-message {
+      color: var(--error-color);
+      font-size: 0.8rem;
+      margin-top: 5px;
+      display: none;
+    }
+
+    .success-message {
+      color: var(--success-color);
+      text-align: center;
+      margin-bottom: 15px;
+      font-weight: 500;
+    }
+
+    .form-footer {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 0.9rem;
+    }
+
+    .form-footer a {
+      color: var(--primary-color);
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    .form-footer a:hover {
+      text-decoration: underline;
+    }
+
+    .forgot-password {
+      text-align: right;
+      margin-top: -15px;
+      margin-bottom: 15px;
+    }
+
+    .forgot-password a {
+      color: var(--primary-color);
+      text-decoration: none;
+      font-size: 0.8rem;
+    }
+
+    .forgot-password a:hover {
+      text-decoration: underline;
+    }
+
+    /* Modal Styles */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .modal-content {
+      background-color: white;
+      padding: 25px;
+      border-radius: 10px;
+      width: 90%;
+      max-width: 400px;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    .modal-header {
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .modal-header h2 {
+      color: var(--primary-color);
+    }
+
+    .modal-footer {
+      margin-top: 20px;
+      text-align: center;
+    }
+
+    .modal-footer a {
+      color: var(--primary-color);
+      text-decoration: none;
+    }
+
+    .modal-footer a:hover {
+      text-decoration: underline;
+    }
+
+    .otp-container {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    .otp-input {
+      width: 50px;
+      height: 50px;
+      text-align: center;
+      font-size: 1.2rem;
+      border: 2px solid #ddd;
+      border-radius: 5px;
+    }
+
+    .otp-input:focus {
+      border-color: var(--primary-color);
+      outline: none;
+    }
+
+    .resend-otp {
+      text-align: center;
+      margin-top: 15px;
+    }
+
+    .resend-otp a {
+      color: var(--primary-color);
+      text-decoration: none;
+    }
+
+    .resend-otp a:hover {
+      text-decoration: underline;
+    }
+
+    @media (max-width: 480px) {
+      .auth-container { width: 95%; }
+      .auth-header h1 { font-size: 1.5rem; }
+      .otp-input {
+        width: 40px;
+        height: 40px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="auth-container">
+    <div class="auth-header">
+      <h1>Welcome to Only@Sham</h1>
+      <p>Login or create an account to reserve products</p>
+      <div class="auth-tabs">
+        <div class="auth-tab active" onclick="switchTab('login')">Login</div>
+        <div class="auth-tab" onclick="switchTab('signup')">Sign Up</div>
+      </div>
+    </div>
+    <div class="auth-forms">
+      <!-- Login Form -->
+      <div class="auth-form active" id="login-form">
+        <div id="login-success" class="success-message" style="display: none;"></div>
+
+        <div class="form-group">
+          <label for="login-username">Username or Email</label>
+          <input type="text" id="login-username" class="form-control" placeholder="Enter your username or email">
+          <div class="error-message" id="login-username-error"></div>
+        </div>
+
+        <div class="form-group" id="admin-code-group" style="display: none;">
+          <label for="admin-code">Admin Code</label>
+          <input type="password" id="admin-code" class="form-control" placeholder="Enter admin code">
+          <div class="error-message" id="admin-code-error"></div>
+        </div>
+
+        <div class="form-group">
+          <label for="login-password">Password</label>
+          <input type="password" id="login-password" class="form-control" placeholder="Enter your password">
+          <i class="fas fa-eye password-toggle input-icon" onclick="togglePassword('login-password', this)"></i>
+          <div class="error-message" id="login-password-error"></div>
+        </div>
+
+        <div class="forgot-password">
+          <a href="#" onclick="showForgotPasswordModal()">Forgot Password?</a>
+        </div>
+
+        <button class="btn btn-primary" onclick="login()">Login</button>
+
+        <div class="form-footer">
+          Don't have an account? <a href="#" onclick="switchTab('signup')">Sign up here</a>
+        </div>
+      </div>
+
+      <!-- Signup Form -->
+      <div class="auth-form" id="signup-form">
+        <div id="signup-success" class="success-message" style="display: none;"></div>
+
+        <div class="form-group">
+          <label for="signup-fullname">Full Name</label>
+          <input type="text" id="signup-fullname" class="form-control" placeholder="Enter your full name">
+          <div class="error-message" id="signup-fullname-error"></div>
+        </div>
+
+        <div class="form-group">
+          <label for="signup-phone">Phone Number</label>
+          <input type="tel" id="signup-phone" class="form-control" placeholder="Enter your phone number">
+          <div class="error-message" id="signup-phone-error"></div>
+        </div>
+
+        <div class="form-group">
+          <label for="signup-email">Email</label>
+          <input type="email" id="signup-email" class="form-control" placeholder="Enter your email">
+          <div class="error-message" id="signup-email-error"></div>
+        </div>
+
+        <div class="form-group">
+          <label for="signup-username">Username</label>
+          <input type="text" id="signup-username" class="form-control" placeholder="Choose a username">
+          <div class="error-message" id="signup-username-error"></div>
+        </div>
+
+        <div class="form-group">
+          <label for="signup-password">Password</label>
+          <input type="password" id="signup-password" class="form-control" placeholder="Create a password">
+          <i class="fas fa-eye password-toggle input-icon" onclick="togglePassword('signup-password', this)"></i>
+          <div class="error-message" id="signup-password-error"></div>
+        </div>
+
+        <div class="form-group">
+          <label for="signup-address">Address (Optional)</label>
+          <textarea id="signup-address" class="form-control" rows="2" placeholder="Enter your address"></textarea>
+        </div>
+
+        <button class="btn btn-primary" onclick="signup()">Create Account</button>
+
+        <div class="form-footer">
+          Already have an account? <a href="#" onclick="switchTab('login')">Login here</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Forgot Password Modal -->
+  <div id="forgotPasswordModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Reset Password</h2>
+      </div>
+      
+      <div id="forgot-password-step1">
+        <div class="form-group">
+          <label for="forgot-phone">Phone Number</label>
+          <input type="tel" id="forgot-phone" class="form-control" placeholder="Enter your registered phone number">
+          <div class="error-message" id="forgot-phone-error"></div>
+        </div>
+        
+        <button class="btn btn-primary" onclick="sendOTP()">Send OTP</button>
+      </div>
+      
+      <div id="forgot-password-step2" style="display: none;">
+        <p>We've sent a 6-digit OTP to your phone number ending with <span id="phone-mask"></span></p>
+        
+        <div class="otp-container">
+          <input type="text" class="otp-input" maxlength="1" data-index="1">
+          <input type="text" class="otp-input" maxlength="1" data-index="2">
+          <input type="text" class="otp-input" maxlength="1" data-index="3">
+          <input type="text" class="otp-input" maxlength="1" data-index="4">
+          <input type="text" class="otp-input" maxlength="1" data-index="5">
+          <input type="text" class="otp-input" maxlength="1" data-index="6">
+        </div>
+        
+        <div class="error-message" id="otp-error"></div>
+        
+        <div class="resend-otp">
+          Didn't receive code? <a href="#" onclick="resendOTP()">Resend</a>
+        </div>
+        
+        <button class="btn btn-primary" onclick="verifyOTP()">Verify OTP</button>
+      </div>
+      
+      <div id="forgot-password-step3" style="display: none;">
+        <div class="form-group">
+          <label for="new-password">New Password</label>
+          <input type="password" id="new-password" class="form-control" placeholder="Enter new password">
+          <i class="fas fa-eye password-toggle input-icon" onclick="togglePassword('new-password', this)"></i>
+          <div class="error-message" id="new-password-error"></div>
+        </div>
+        
+        <div class="form-group">
+          <label for="confirm-password">Confirm Password</label>
+          <input type="password" id="confirm-password" class="form-control" placeholder="Confirm new password">
+          <i class="fas fa-eye password-toggle input-icon" onclick="togglePassword('confirm-password', this)"></i>
+          <div class="error-message" id="confirm-password-error"></div>
+        </div>
+        
+        <button class="btn btn-primary" onclick="resetPassword()">Reset Password</button>
+      </div>
+      
+      <div class="modal-footer">
+        <a href="#" onclick="closeModal()">Back to Login</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Current OTP and phone number for password reset
+    let currentOTP = '';
+    let resetPhone = '';
+    let currentUserToReset = null;
+
+    function switchTab(tab) {
+      document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
+      document.querySelector(`.auth-tab:nth-child(${tab === 'login' ? 1 : 2})`).classList.add('active');
+      document.getElementById(`${tab}-form`).classList.add('active');
+    }
+
+    function togglePassword(inputId, icon) {
+      const input = document.getElementById(inputId);
+      input.type = input.type === 'password' ? 'text' : 'password';
+      icon.classList.toggle('fa-eye');
+      icon.classList.toggle('fa-eye-slash');
+    }
+
+    function validateEmail(email) {
+      const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      return re.test(email.toLowerCase());
+    }
+
+    function validatePhone(phone) {
+      return /^[0-9]{10,15}$/.test(phone);
+    }
+
+    function validatePassword(password) {
+      return password.length >= 6;
+    }
+
+    function showError(id, message) {
+      const el = document.getElementById(id);
+      el.textContent = message;
+      el.style.display = 'block';
+    }
+
+    function hideError(id) {
+      document.getElementById(id).style.display = 'none';
+    }
+
+    function login() {
+      const usernameOrEmail = document.getElementById('login-username').value.trim();
+      const password = document.getElementById('login-password').value.trim();
+      const adminCode = document.getElementById('admin-code')?.value.trim();
+      hideError('login-username-error');
+      hideError('login-password-error');
+      hideError('admin-code-error');
+
+      let valid = true;
+      if (!usernameOrEmail) { showError('login-username-error', 'Username or email is required'); valid = false; }
+      if (!password || !validatePassword(password)) {
+        showError('login-password-error', 'Password must be at least 6 characters'); valid = false;
+      }
+      if (!valid) return;
+
+      if (usernameOrEmail.toLowerCase() === 'admin') {
+        document.getElementById('admin-code-group').style.display = 'block';
+        if (!adminCode) return showError('admin-code-error', 'Admin code is required');
+        const admins = JSON.parse(localStorage.getItem('adminUsers')) || [];
+        const admin = admins.find(a => a.username === usernameOrEmail && a.password === password && a.adminCode === adminCode);
+        if (admin) {
+          localStorage.setItem('loggedInAdmin', JSON.stringify(admin));
+          document.getElementById('login-success').textContent = 'Admin login successful! Redirecting...';
+          document.getElementById('login-success').style.display = 'block';
+          return setTimeout(() => window.location.href = 'admin-dashboard.html', 1500);
+        }
+        return showError('admin-code-error', 'Invalid admin credentials');
+      }
+
+      const users = JSON.parse(localStorage.getItem('users')) || [];
+      const user = users.find(u => 
+          (u.username === usernameOrEmail || u.email === usernameOrEmail) && 
+          u.password === password
+      );
+      
+      if (user) {
+          if (user.banned) {
+              const banReason = user.banReason || 'No reason provided';
+              return showError('login-password-error', `Your account is banned. Reason: ${banReason}`);
+          }
+          
+          localStorage.setItem('loggedInUser', JSON.stringify(user));
+          document.getElementById('login-success').textContent = 'Login successful! Redirecting...';
+          document.getElementById('login-success').style.display = 'block';
+          return setTimeout(() => window.location.href = 'index.html', 1500);
+      } else {
+          showError('login-password-error', 'Invalid username/email or password');
+      }
+    }
+
+    function signup() {
+      const fullname = document.getElementById('signup-fullname').value.trim();
+      const phone = document.getElementById('signup-phone').value.trim();
+      const email = document.getElementById('signup-email').value.trim();
+      const username = document.getElementById('signup-username').value.trim();
+      const password = document.getElementById('signup-password').value.trim();
+      const address = document.getElementById('signup-address').value.trim();
+
+      hideError('signup-fullname-error');
+      hideError('signup-phone-error');
+      hideError('signup-email-error');
+      hideError('signup-username-error');
+      hideError('signup-password-error');
+
+      let valid = true;
+      if (!fullname) { showError('signup-fullname-error', 'Full name is required'); valid = false; }
+      if (!phone || !validatePhone(phone)) { showError('signup-phone-error', 'Valid phone is required'); valid = false; }
+      if (!email || !validateEmail(email)) { showError('signup-email-error', 'Valid email is required'); valid = false; }
+      if (!username) { showError('signup-username-error', 'Username is required'); valid = false; }
+      if (!password || !validatePassword(password)) { showError('signup-password-error', 'Password must be at least 6 characters'); valid = false; }
+      if (!valid) return;
+
+      const users = JSON.parse(localStorage.getItem('users')) || [];
+      
+      // Check for duplicates
+      if (users.some(u => u.username === username)) {
+        showError('signup-username-error', 'Username already taken');
+        return;
+      }
+      
+      if (users.some(u => u.phone === phone)) {
+        showError('signup-phone-error', 'Phone number already registered');
+        return;
+      }
+      
+      if (users.some(u => u.email === email)) {
+        showError('signup-email-error', 'Email already registered');
+        return;
+      }
+
+      const newUser = { 
+        fullname, 
+        phone, 
+        email,
+        username, 
+        password, 
+        address, 
+        reservations: [] 
+      };
+      
+      users.push(newUser);
+      localStorage.setItem('users', JSON.stringify(users));
+      localStorage.setItem('loggedInUser', JSON.stringify(newUser));
+      
+      document.getElementById('signup-success').textContent = 'Account created successfully! Redirecting...';
+      document.getElementById('signup-success').style.display = 'block';
+      setTimeout(() => window.location.href = 'index.html', 1500);
+    }
+
+    function initializeAdminUser() {
+      const admins = JSON.parse(localStorage.getItem('adminUsers')) || [];
+      if (!admins.some(u => u.username === 'admin')) {
+        admins.push({
+          username: "admin",
+          password: "admin123",
+          adminCode: "Rimuru123",
+          fullname: "System Administrator",
+          email: "admin@onlyatsham.com",
+          phone: "1234567890"
+        });
+        localStorage.setItem('adminUsers', JSON.stringify(admins));
+      }
+    }
+
+    // Forgot Password Functions
+    function showForgotPasswordModal() {
+      document.getElementById('forgotPasswordModal').style.display = 'flex';
+      document.getElementById('forgot-password-step1').style.display = 'block';
+      document.getElementById('forgot-password-step2').style.display = 'none';
+      document.getElementById('forgot-password-step3').style.display = 'none';
+      document.getElementById('forgot-phone').value = '';
+      document.getElementById('forgot-phone-error').style.display = 'none';
+      document.getElementById('otp-error').style.display = 'none';
+    }
+
+    function closeModal() {
+      document.getElementById('forgotPasswordModal').style.display = 'none';
+    }
+
+    function sendOTP() {
+      const phone = document.getElementById('forgot-phone').value.trim();
+      hideError('forgot-phone-error');
+
+      if (!phone || !validatePhone(phone)) {
+        return showError('forgot-phone-error', 'Please enter a valid phone number');
+      }
+
+      // Check if phone exists in users
+      const users = JSON.parse(localStorage.getItem('users')) || [];
+      const user = users.find(u => u.phone === phone);
+      
+      if (!user) {
+        return showError('forgot-phone-error', 'No account found with this phone number');
+      }
+
+      currentUserToReset = user;
+      resetPhone = phone;
+      
+      // Generate a 6-digit OTP (in a real app, this would be sent via SMS)
+      currentOTP = Math.floor(100000 + Math.random() * 900000).toString();
+      console.log(`OTP for ${phone}: ${currentOTP}`); // For demo purposes only
+      
+      // Show OTP input step
+      document.getElementById('forgot-password-step1').style.display = 'none';
+      document.getElementById('forgot-password-step2').style.display = 'block';
+      
+      // Mask the phone number for display
+      const maskedPhone = phone.substring(0, 3) + '****' + phone.substring(7);
+      document.getElementById('phone-mask').textContent = maskedPhone;
+      
+      // Focus first OTP input
+      document.querySelector('.otp-input').focus();
+      
+      // Setup OTP input auto-focus
+      setupOTPInputs();
+    }
+
+    function setupOTPInputs() {
+      const otpInputs = document.querySelectorAll('.otp-input');
+      
+      otpInputs.forEach(input => {
+        input.value = '';
+        input.addEventListener('input', function(e) {
+          if (this.value.length === 1) {
+            const nextIndex = parseInt(this.dataset.index) + 1;
+            const nextInput = document.querySelector(`.otp-input[data-index="${nextIndex}"]`);
+            if (nextInput) nextInput.focus();
+          }
+        });
+        
+        input.addEventListener('keydown', function(e) {
+          if (e.key === 'Backspace' && this.value.length === 0) {
+            const prevIndex = parseInt(this.dataset.index) - 1;
+            const prevInput = document.querySelector(`.otp-input[data-index="${prevIndex}"]`);
+            if (prevInput) prevInput.focus();
+          }
+        });
+      });
+    }
+
+    function verifyOTP() {
+      const otpInputs = document.querySelectorAll('.otp-input');
+      let enteredOTP = '';
+      
+      otpInputs.forEach(input => {
+        enteredOTP += input.value;
+      });
+      
+      hideError('otp-error');
+      
+      if (enteredOTP.length !== 6) {
+        return showError('otp-error', 'Please enter the full 6-digit OTP');
+      }
+      
+      if (enteredOTP !== currentOTP) {
+        return showError('otp-error', 'Invalid OTP. Please try again');
+      }
+      
+      // OTP verified, show password reset form
+      document.getElementById('forgot-password-step2').style.display = 'none';
+      document.getElementById('forgot-password-step3').style.display = 'block';
+    }
+
+    function resendOTP() {
+      // Generate a new OTP
+      currentOTP = Math.floor(100000 + Math.random() * 900000).toString();
+      console.log(`New OTP for ${resetPhone}: ${currentOTP}`); // For demo purposes only
+      
+      // Clear OTP inputs
+      const otpInputs = document.querySelectorAll('.otp-input');
+      otpInputs.forEach(input => input.value = '');
+      otpInputs[0].focus();
+      
+      hideError('otp-error');
+    }
+
+    function resetPassword() {
+      const newPassword = document.getElementById('new-password').value.trim();
+      const confirmPassword = document.getElementById('confirm-password').value.trim();
+      
+      hideError('new-password-error');
+      hideError('confirm-password-error');
+      
+      if (!newPassword || !validatePassword(newPassword)) {
+        return showError('new-password-error', 'Password must be at least 6 characters');
+      }
+      
+      if (newPassword !== confirmPassword) {
+        return showError('confirm-password-error', 'Passwords do not match');
+      }
+      
+      // Update user's password
+      const users = JSON.parse(localStorage.getItem('users')) || [];
+      const userIndex = users.findIndex(u => u.phone === resetPhone);
+      
+      if (userIndex !== -1) {
+        users[userIndex].password = newPassword;
+        localStorage.setItem('users', JSON.stringify(users));
+        
+        // Show success and close modal
+        alert('Password reset successfully! You can now login with your new password.');
+        closeModal();
+      } else {
+        alert('Error updating password. Please try again.');
+      }
+    }
+
+    window.onload = function() {
+      initializeAdminUser();
+      
+      // Check for banned user redirect
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('banned') === 'true') {
+        document.getElementById('login-username').value = '';
+        showError('login-password-error', 'Your account has been banned by admin');
+      }
+      
+      if (localStorage.getItem('loggedInUser') || localStorage.getItem('loggedInAdmin')) {
+        window.location.href = localStorage.getItem('loggedInAdmin') ? 'admin-dashboard.html' : 'index.html';
+        return;
+      }
+      
+      document.getElementById('admin-code-group').style.display = 'none';
+      document.getElementById('login-username').addEventListener('input', function() {
+        document.getElementById('admin-code-group').style.display = this.value.trim().toLowerCase() === 'admin' ? 'block' : 'none';
+      });
+      
+      // Close modal when clicking outside
+      document.getElementById('forgotPasswordModal').addEventListener('click', function(e) {
+        if (e.target === this) closeModal();
+      });
+    };
+  </script>
+</body>
+</html>
