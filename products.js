@@ -209,6 +209,9 @@ function renderProducts(products) {
                      onerror="this.onerror=null;this.src='assets/default-product.jpg'">
                 ${product.featured ? '<span class="featured-badge">Featured</span>' : ''}
                 ${product.originalPrice ? '<span class="discount-flag">SALE</span>' : ''}
+                <button class="quick-view-btn" data-id="${product.id}">
+                    <i class="fas fa-eye"></i> Quick View
+                </button>
             </div>
             <h3>${product.name}</h3>
             ${priceDisplay}
@@ -239,8 +242,16 @@ function renderProducts(products) {
             addToCart(productId, size);
         });
     });
+    
+    // Add event listeners to quick view buttons
+    document.querySelectorAll('.quick-view-btn').forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const productId = this.getAttribute('data-id');
+            openQuickView(productId);
+        });
+    });
 }
-
 function addToCart(productId, size) {
     try {
         const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));

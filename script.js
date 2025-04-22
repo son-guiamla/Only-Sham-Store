@@ -236,6 +236,161 @@ function setupLoginLogout() {
 }
 
 /* ======================
+   QUICK VIEW FUNCTIONS
+   ====================== */
+
+/**
+ * Opens the quick view modal for a product
+ * @param {string} productId - The ID of the product to display
+ */
+function openQuickView(productId) {
+    try {
+        const products = JSON.parse(localStorage.getItem('products')) || [];
+        const product = products.find(p => p.id === productId);
+        
+        if (!product) {
+            alert('Product not found');
+            return;
+        }
+        
+        // Check if product is in any active flash sale
+        const flashSales = JSON.parse(localStorage.getItem('flashSales')) || [];
+        const now = new Date();
+        let isOnSale = false;
+        let salePrice = product.price;
+        
+        for (const sale of flashSales) {
+            const start = new Date(sale.startTime);
+            const end = new Date(sale.endTime);
+            
+            if (now >= start && now <= end) {
+                // Check if product is included in this sale
+                if (sale.scope === 'all' || 
+                    (sale.scope === 'products' && sale.products.includes(productId)) ||
+                    (sale.scope === 'categories' && sale.categories.includes(product.category))) {
+                    
+                    isOnSale = true;
+                    if (sale.discountType === 'percentage') {
+                        salePrice = product.price * (1 - sale.discountValue / 100);
+                    } else {
+                        salePrice = Math.max(0, product.price - sale.discountValue);
+                    }
+                    break;
+                }
+            }
+        }
+        
+        // Update modal content
+        document.getElementById('modalProductTitle').textContent = product.name;
+        document.getElementById('modalProductImage').src = product.image || 'assets/default-product.jpg';
+        document.getElementById('modalProductImage').onerror = function() {
+            this.src = 'assets/default-product.jpg';
+        };
+        document.getElementById('modalProductDescription').textContent = product.description || 'No description available';
+        
+        // Display price with sale info if applicable
+        const priceElement = document.getElementById('modalProductPrice');
+        if (isOnSale) {
+            priceElement.innerHTML = `
+                <span class="original-price">₱${product.price.toFixed(2)}</span>
+                <span class="discounted-price">₱${salePrice.toFixed(2)}</span>
+            `;
+            document.getElementById('quickViewSaleBadge').style.display = 'block';
+        } else {
+            priceElement.textContent = `₱${product.price.toFixed(2)}`;
+            document.getElementById('quickViewSaleBadge').style.display = 'none';
+        }
+        
+        // Populate size options
+        const sizesContainer = document.getElementById('quickViewSizes');
+        sizesContainer.innerHTML = '';
+        
+        if (product.sizes) {
+            const availableSizes = Object.entries(product.sizes)
+                .filter(([_, quantity]) => quantity > 0)
+                .map(([size]) => size);
+            
+            if (availableSizes.length > 0) {
+                availableSizes.forEach(size => {
+                    const sizeOption = document.createElement('div');
+                    sizeOption.className = 'size-option';
+                    sizeOption.textContent = size;
+                    sizeOption.setAttribute('data-size', size);
+                    sizeOption.addEventListener('click', function() {
+                        document.querySelectorAll('#quickViewSizes .size-option').forEach(opt => {
+                            opt.classList.remove('selected');
+                        });
+                        this.classList.add('selected');
+                        selectedQuickViewSize = size;
+                    });
+                    
+                    // Select first size by default
+                    if (availableSizes.indexOf(size) === 0) {
+                        sizeOption.classList.add('selected');
+                        selectedQuickViewSize = size;
+                    }
+                    
+                    sizesContainer.appendChild(sizeOption);
+                });
+            } else {
+                sizesContainer.innerHTML = '<p class="empty-message">No sizes available</p>';
+            }
+        } else {
+            sizesContainer.innerHTML = '<p class="empty-message">No size information</p>';
+        }
+        
+        // Set product ID on buttons
+        document.getElementById('addToCartBtn').setAttribute('data-id', productId);
+        document.getElementById('reserveInModal').setAttribute('data-id', productId);
+        
+        // Show modal
+        document.getElementById('productModal').style.display = 'block';
+        document.body.style.overflow = 'hidden';
+    } catch (error) {
+        console.error('Error opening quick view:', error);
+        alert('An error occurred while loading the product details');
+    }
+}
+
+/**
+ * Closes the quick view modal
+ */
+function closeQuickView() {
+    document.getElementById('productModal').style.display = 'none';
+    document.body.style.overflow = 'auto';
+}
+
+// Track selected size in quick view
+let selectedQuickViewSize = '';
+
+// Initialize quick view functionality
+function initQuickView() {
+    // Close modal
+    document.querySelector('.close-modal').addEventListener('click', closeQuickView);
+    
+    // Close modal when clicking outside
+    window.addEventListener('click', (e) => {
+        if (e.target === document.getElementById('productModal')) {
+            closeQuickView();
+        }
+    });
+    
+    // Add to Cart button in modal
+    document.getElementById('addToCartBtn').addEventListener('click', function() {
+        const productId = this.getAttribute('data-id');
+        addToCart(productId, selectedQuickViewSize);
+        closeQuickView();
+    });
+
+    // Reserve button in modal
+    document.getElementById('reserveInModal').addEventListener('click', function() {
+        const productId = this.getAttribute('data-id');
+        addToCart(productId, selectedQuickViewSize);
+        closeQuickView();
+        window.location.href = 'cart.html';
+    });
+}
+/* ======================
    INITIALIZATION
    ====================== */
 
@@ -246,6 +401,7 @@ document.addEventListener('DOMContentLoaded', function() {
     try {
         // Initialize general utilities
         initSmoothScrolling();
+        initQuickView();
         
         // Initialize cart and reservation functionality
         setupLoginLogout();

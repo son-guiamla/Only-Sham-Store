@@ -66,19 +66,9 @@
     <!-- Featured Products Section -->
     <div class="product-grid" id="product-grid">
         <!-- Products will be loaded here by JavaScript -->
-        <div class="product-card">
-            <div class="product-image">
-                <img src="product-image.jpg" alt="Product Name">
-            </div>
-            <div class="product-info">
-                <h3>Product Name</h3>
-                <div class="product-price">₱999.99</div>
-                <div class="product-actions">
-                    <button class="add-to-cart" data-id="product-id">Add to Cart</button>
-                </div>
-            </div>
-        </div>
-    </div>  
+        <div>
+            
+        </div>  
             
         </div>
     </section>
@@ -165,7 +155,37 @@
     </section>
 
 
-  
+  <!-- Product Detail Modal -->
+<div id="productModal" class="modal">
+    <span class="close-modal">&times;</span>
+    <div class="modal-content">
+        <div class="product-detail">
+            <div class="product-detail-images">
+                <img id="modalProductImage" src="" alt="">
+                <div id="quickViewSaleBadge" class="product-badge" style="display: none;">Sale</div>
+            </div>
+            <div class="product-detail-info">
+                <h2 id="modalProductTitle">Product Title</h2>
+                <div class="product-price-large" id="modalProductPrice">₱0.00</div>
+                <p class="product-description" id="modalProductDescription">
+                    Product description will be loaded here.
+                </p>
+                <div class="product-options">
+                    <div class="option-group">
+                        <h4>Size</h4>
+                        <div class="size-options" id="quickViewSizes">
+                            <!-- Size options will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+                <div class="detail-actions">
+                    <button class="btn" id="reserveInModal">Reserve Now</button>
+                    <button class="btn" id="addToCartBtn" style="background-color: var(--secondary-color); color: var(--dark-color);">Add to Cart</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 <!-- Shop Reviews Section -->
 <section id="shop-reviews" class="shop-reviews">
     <h2>Customer Reviews</h2>
