@@ -589,20 +589,7 @@
       setTimeout(() => window.location.href = 'index.html', 1500);
     }
 
-    function initializeAdminUser() {
-      const admins = JSON.parse(localStorage.getItem('adminUsers')) || [];
-      if (!admins.some(u => u.username === 'admin')) {
-        admins.push({
-          username: "admin",
-          password: "admin123",
-          adminCode: "Rimuru123",
-          fullname: "System Administrator",
-          email: "admin@onlyatsham.com",
-          phone: "1234567890"
-        });
-        localStorage.setItem('adminUsers', JSON.stringify(admins));
-      }
-    }
+   
 
     // Forgot Password functions
     function showForgotPasswordModal() {
