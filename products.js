@@ -19,7 +19,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load products with optional category filter
     loadProducts(category);
     updateCartCount();
-    setupLoginLogout();
     displayActiveFlashSales();
     
     // Listen for changes in products data
@@ -385,31 +384,6 @@ function updateCartCount() {
         }
     } catch (error) {
         console.error('Error updating cart count:', error);
-    }
-}
-
-function setupLoginLogout() {
-    try {
-        const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
-        const loginLink = document.getElementById('login-logout-link');
-        
-        if (!loginLink) return;
-        
-        if (loggedInUser) {
-            loginLink.textContent = 'Logout';
-            loginLink.href = 'login.html';
-            loginLink.onclick = function(e) {
-                e.preventDefault();
-                localStorage.removeItem('loggedInUser');
-                window.location.href = 'index.html';
-            };
-        } else {
-            loginLink.textContent = 'Login';
-            loginLink.href = 'login.html';
-            loginLink.onclick = null;
-        }
-    } catch (error) {
-        console.error('Error setting up login/logout:', error);
     }
 }
 

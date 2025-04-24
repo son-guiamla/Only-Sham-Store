@@ -1,3 +1,6 @@
+// Initialize admin user on script load
+initializeAdminUser();
+
 // Toggle sidebar
 function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
@@ -55,6 +58,7 @@ function registerUser(fullname, username, email, phone, password, gender = '') {
     localStorage.setItem('users', JSON.stringify(users));
     return true;
 }
+
 // Add this function to auth.js
 function checkUserBanStatus() {
     const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
@@ -76,6 +80,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!checkUserBanStatus()) return;
     // Rest of your existing code
 });
+
 function setupLoginLogout() {
     try {
         const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
@@ -98,5 +103,22 @@ function setupLoginLogout() {
         }
     } catch (error) {
         console.error('Error setting up login/logout:', error);
+    }
+}
+
+// Admin user initialization function
+function initializeAdminUser() {
+    const admins = JSON.parse(localStorage.getItem('adminUsers')) || [];
+    if (!admins.some(u => u.username === 'admin')) {
+        admins.push({
+            username: "admin",
+            password: "admin123",
+            adminCode: "Rimuru123",
+            fullname: "System Administrator",
+            email: "admin@onlyatsham.com",
+            phone: "1234567890"
+        });
+        localStorage.setItem('adminUsers', JSON.stringify(admins));
+        console.log('Admin user initialized');
     }
 }
