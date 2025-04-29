@@ -1,246 +1,116 @@
-import { REVIEWS_ENDPOINT } from './config.js';
-import { getAuthToken, isLoggedIn } from './auth.js';
-
-document.addEventListener('DOMContentLoaded', async function() {
-    await loadReviews();
-    setupRatingStars();
-});
-
+// Global scope for stars and rating
 let selectedRating = 0;
 let stars = [];
 
-function setupRatingStars() {
-    stars = Array.from(document.querySelectorAll('.star'));
-    stars.forEach((star, index) => {
-        star.addEventListener('click', () => {
-            selectedRating = index + 1;
-            updateStarsDisplay();
+document.addEventListener('DOMContentLoaded', function () {
+    // Load reviews
+    loadReviews();
+
+    // Handle review submission
+    stars = document.querySelectorAll('.stars i');
+
+    stars.forEach(star => {
+        star.addEventListener('click', function () {
+            selectedRating = parseInt(this.getAttribute('data-rating'));
+            stars.forEach((s, index) => {
+                if (index < selectedRating) {
+                    s.classList.remove('far');
+                    s.classList.add('fas');
+                } else {
+                    s.classList.remove('fas');
+                    s.classList.add('far');
+                }
+            });
             document.querySelector('.rating-text').textContent = `${selectedRating}/5`;
         });
     });
-}
 
-function updateStarsDisplay() {
-    stars.forEach((star, index) => {
-        star.classList.toggle('fas', index < selectedRating);
-        star.classList.toggle('far', index >= selectedRating);
+    document.getElementById('submit-review').addEventListener('click', submitReview);
+});
+
+function loadReviews() {
+    const reviews = JSON.parse(localStorage.getItem('shopReviews')) || [];
+    const container = document.getElementById('reviews-container');
+    container.innerHTML = '';
+
+    if (reviews.length === 0) {
+        container.innerHTML = '<p class="empty-message">No reviews yet. Be the first to review!</p>';
+        return;
+    }
+
+    reviews.forEach(review => {
+        const reviewElement = document.createElement('div');
+        reviewElement.className = 'review-item';
+        
+        // Get user data including profile picture
+        const users = JSON.parse(localStorage.getItem('users')) || [];
+        const user = users.find(u => u.username === review.username);
+        const profilePic = user?.profilePicture || review.profilePicture || 'assets/default-profile.png';
+        
+        reviewElement.innerHTML = `
+            <div class="review-header">
+                <img src="${profilePic}" alt="${review.username}" class="reviewer-avatar">
+                <div>
+                    <div class="reviewer-name">${review.username}</div>
+                    <div class="review-date">${new Date(review.date).toLocaleDateString()}</div>
+                </div>
+            </div>
+            <div class="review-rating">
+                ${'★'.repeat(review.rating)}${'☆'.repeat(5 - review.rating)}
+            </div>
+            <div class="review-text">${review.comment}</div>
+        `;
+        container.appendChild(reviewElement);
     });
 }
 
-async function loadReviews() {
-    const container = document.getElementById('reviews-container');
-    container.innerHTML = '<div class="loading">Loading reviews...</div>';
-    
-    try {
-        const response = await fetch(REVIEWS_ENDPOINT);
-        
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.message);
-        }
-        
-        const reviews = await response.json();
-        
-        if (!reviews.length) {
-            container.innerHTML = '<div class="empty">No reviews yet. Be the first!</div>';
-            return;
-        }
-        
-        container.innerHTML = reviews.map(review => `
-            <div class="review" data-id="${review.id}">
-                <div class="review-header">
-                    <img src="${review.user.profilePicture || 'assets/default-profile.png'}" 
-                         alt="${review.user.username}" 
-                         class="review-avatar">
-                    <div>
-                        <h4>${review.user.username}</h4>
-                        <div class="review-meta">
-                            <span class="review-rating">${'★'.repeat(review.rating)}${'☆'.repeat(5 - review.rating)}</span>
-                            <span class="review-date">${new Date(review.createdAt).toLocaleDateString()}</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="review-content">
-                    <p>${review.comment}</p>
-                </div>
-                ${review.canEdit ? `
-                    <div class="review-actions">
-                        <button class="btn edit-review" onclick="editReview('${review.id}')">Edit</button>
-                        <button class="btn delete-review" onclick="deleteReview('${review.id}')">Delete</button>
-                    </div>
-                ` : ''}
-            </div>
-        `).join('');
-    } catch (error) {
-        console.error('Error loading reviews:', error);
-        container.innerHTML = `<div class="error">${error.message}</div>`;
-    }
-}
-
-window.submitReview = async function() {
-    if (!isLoggedIn()) {
+function submitReview() {
+    const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
+    if (!loggedInUser) {
         alert('Please login to submit a review');
-        window.location.href = 'login.html';
         return;
     }
-    
+
     const comment = document.getElementById('review-comment').value.trim();
-    
-    if (!selectedRating) {
+    const rating = selectedRating;
+
+    if (rating === 0) {
         alert('Please select a rating');
         return;
     }
-    
-    if (!comment) {
-        alert('Please enter your review');
+
+    if (comment === '') {
+        alert('Please enter your review comment');
         return;
     }
-    
-    try {
-        const response = await fetch(REVIEWS_ENDPOINT, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${getAuthToken()}`
-            },
-            body: JSON.stringify({ rating: selectedRating, comment })
-        });
-        
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.message);
-        }
-        
-        // Reset form
-        document.getElementById('review-comment').value = '';
-        selectedRating = 0;
-        updateStarsDisplay();
-        document.querySelector('.rating-text').textContent = '0/5';
-        
-        // Reload reviews
-        await loadReviews();
-        
-        // Show success
-        showNotification('Review submitted successfully!', 'success');
-    } catch (error) {
-        console.error('Error submitting review:', error);
-        showNotification(error.message, 'error');
-    }
-};
 
-window.editReview = async function(reviewId) {
-    try {
-        // Get review details
-        const response = await fetch(`${REVIEWS_ENDPOINT}${reviewId}`, {
-            headers: {
-                'Authorization': `Bearer ${getAuthToken()}`
-            }
-        });
-        
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.message);
-        }
-        
-        const review = await response.json();
-        
-        // Populate edit form
-        selectedRating = review.rating;
-        updateStarsDisplay();
-        document.querySelector('.rating-text').textContent = `${selectedRating}/5`;
-        document.getElementById('review-comment').value = review.comment;
-        
-        // Change submit button to update
-        const submitBtn = document.getElementById('submit-review');
-        submitBtn.textContent = 'Update Review';
-        submitBtn.onclick = async function() {
-            await updateReview(reviewId);
-        };
-        
-        // Scroll to form
-        document.getElementById('review-form').scrollIntoView();
-    } catch (error) {
-        console.error('Error editing review:', error);
-        showNotification(error.message, 'error');
-    }
-};
+    const reviews = JSON.parse(localStorage.getItem('shopReviews')) || [];
 
-async function updateReview(reviewId) {
-    const comment = document.getElementById('review-comment').value.trim();
-    
-    if (!selectedRating || !comment) {
-        alert('Please provide both rating and comment');
-        return;
-    }
-    
-    try {
-        const response = await fetch(`${REVIEWS_ENDPOINT}${reviewId}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${getAuthToken()}`
-            },
-            body: JSON.stringify({ rating: selectedRating, comment })
-        });
-        
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.message);
-        }
-        
-        // Reset form
-        document.getElementById('review-comment').value = '';
-        selectedRating = 0;
-        updateStarsDisplay();
-        document.querySelector('.rating-text').textContent = '0/5';
-        
-        // Reset submit button
-        const submitBtn = document.getElementById('submit-review');
-        submitBtn.textContent = 'Submit Review';
-        submitBtn.onclick = submitReview;
-        
-        // Reload reviews
-        await loadReviews();
-        
-        showNotification('Review updated successfully!', 'success');
-    } catch (error) {
-        console.error('Error updating review:', error);
-        showNotification(error.message, 'error');
-    }
-}
+    // Get user's profile picture from both loggedInUser and users array
+    const users = JSON.parse(localStorage.getItem('users')) || [];
+    const user = users.find(u => u.username === loggedInUser.username);
+    const profilePic = user?.profilePicture || loggedInUser.profilePicture || 'assets/default-profile.png';
 
-window.deleteReview = async function(reviewId) {
-    if (!confirm('Are you sure you want to delete this review?')) return;
-    
-    try {
-        const response = await fetch(`${REVIEWS_ENDPOINT}${reviewId}`, {
-            method: 'DELETE',
-            headers: {
-                'Authorization': `Bearer ${getAuthToken()}`
-            }
-        });
-        
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.message);
-        }
-        
-        await loadReviews();
-        showNotification('Review deleted successfully', 'success');
-    } catch (error) {
-        console.error('Error deleting review:', error);
-        showNotification(error.message, 'error');
-    }
-};
+    reviews.push({
+        username: loggedInUser.username,
+        profilePicture: profilePic,
+        rating,
+        comment,
+        date: new Date().toISOString()
+    });
 
-function showNotification(message, type) {
-    const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
-    notification.textContent = message;
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        notification.classList.add('fade-out');
-        setTimeout(() => notification.remove(), 300);
-    }, 3000);
+    localStorage.setItem('shopReviews', JSON.stringify(reviews));
+
+    // Reset form
+    document.getElementById('review-comment').value = '';
+    stars.forEach(star => {
+        star.classList.remove('fas');
+        star.classList.add('far');
+    });
+    document.querySelector('.rating-text').textContent = '0/5';
+    selectedRating = 0;
+
+    // Reload reviews
+    loadReviews();
+    alert('Thank you for your review!');
 }

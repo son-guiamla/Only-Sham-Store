@@ -1,69 +1,313 @@
 <?php
-header('Content-Type: application/json'); // Set response as JSON
-header('Access-Control-Allow-Origin: *'); //  For cross-origin requests (development - refine in production!)
-header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE');
-header('Access-Control-Allow-Headers: Content-Type');
+session_start();
+require_once 'includes/auth_functions.php';
 
-$request_method = $_SERVER['REQUEST_METHOD'];
-$request_uri = $_SERVER['REQUEST_URI'];
-$path_info = isset($_SERVER['PATH_INFO']) ? $_SERVER['PATH_INFO'] : '/';
-$segments = explode('/', trim($path_info, '/'));
-$endpoint = $segments[0];  // e.g., 'products', 'users', 'auth'
-
-// Include necessary files
-require __DIR__ . '/config/database.php'; // Database connection
-// You might use autoloading for controllers/models (PSR-4)
-
-// Basic routing - Expand as needed
-switch ($endpoint) {
-    case 'products':
-        require __DIR__ . '/controllers/ProductController.php';
-        $controller = new ProductController($conn, $request_method, $segments);
-        $controller->processRequest();
-        break;
-    case 'users':
-        require __DIR__ . '/controllers/UserController.php';
-        $controller = new UserController($conn, $request_method, $segments);
-        $controller->processRequest();
-        break;
-    case 'auth':
-        require __DIR__ . '/controllers/AuthController.php';
-        $controller = new AuthController($conn, $request_method, $segments);
-        $controller->processRequest();
-        break;
-    case 'cart':
-        require __DIR__ . '/controllers/CartController.php';
-        $controller = new CartController($conn, $request_method, $segments);
-        $controller->processRequest();
-        break;
-    case 'reservations':
-        require __DIR__ . '/controllers/ReservationController.php';
-        $controller = new ReservationController($conn, $request_method, $segments);
-        $controller->processRequest();
-        break;
-    case 'feedback':
-        require __DIR__ . '/controllers/FeedbackController.php';
-        $controller = new FeedbackController($conn, $request_method, $segments);
-        $controller->processRequest();
-        break;
-    case 'orders':
-        require __DIR__ . '/controllers/OrderController.php';
-        $controller = new OrderController($conn, $request_method, $segments);
-        $controller->processRequest();
-        break;
-    case 'flashsales':
-        require __DIR__ . '/controllers/FlashSaleController.php';
-        $controller = new FlashSaleController($conn, $request_method, $segments);
-        $controller->processRequest();
-        break;
-    case 'reviews':
-        require __DIR__ . '/controllers/ReviewController.php';
-        $controller = new ReviewController($conn, $request_method, $segments);
-        $controller->processRequest();
-        break;
-    default:
-        http_response_code(404);
-        echo json_encode(['error' => 'Endpoint not found']);
-        break;
+// Check if user is banned
+if (isset($_SESSION['user_id'])) {
+    $conn = db_connect();
+    $stmt = $conn->prepare("SELECT banned, ban_reason FROM users WHERE id = ?");
+    $stmt->bind_param("i", $_SESSION['user_id']);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows === 1) {
+        $user = $result->fetch_assoc();
+        if ($user['banned']) {
+            session_destroy();
+            header("Location: login.php?banned=true");
+            exit;
+        }
+    }
 }
 ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Only@Sham</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <nav class="navbar">
+        <!-- Logo -->
+        <div class="logo">
+            <a href="#">Only@Sham</a>
+        </div>
+
+        <!-- Menu Links -->
+        <ul class="nav-links">
+            <li><a href="#hero">Home</a></li>
+            <li><a href="#product-grid">Shop</a></li>
+            <li><a href="cart.php">Reservations</a></li>
+            <li><a href="#about-us">About Us</a></li>
+            <li><a href="#Contact">Contact</a></li>
+        </ul>
+
+        <!-- Search Bar -->
+        <div class="search-bar">
+            <input type="text" placeholder="Search...">
+            <button><i class="fas fa-search"></i></button>
+            <div id="search-results-message" class="search-message"></div>
+        </div>
+
+        <!-- Icons -->
+        <div class="nav-icons">
+            <a href="cart.php" class="cart-icon"><i class="fas fa-shopping-cart"><sup><span id="cart-count">0</span></a></li></i></a>
+            <a href="profile.php" class="profile-icon"><i class="fas fa-user"></i></a>
+            <div class="settings-icon" onclick="toggleSidebar()">
+                <i class="fas fa-ellipsis-v"></i>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="sidebar" id="sidebar">
+            <a href="#" class="close-btn" onclick="toggleSidebar()">&times;</a>
+            <?php if (isset($_SESSION['user_id'])): ?>
+                <a href="logout.php" id="login-logout-link">Logout</a>
+            <?php else: ?>
+                <a href="login.php" id="login-logout-link">Login</a>
+            <?php endif; ?>
+            <a href="#" class="sidebar-link settings-link">Settings</a>
+            <a href="#" class="sidebar-link help-link">Help</a>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section id="hero">
+        <section class="hero">
+            <div class="hero-content">
+                <h1>Discover the Latest Trends</h1>
+                <p>Upgrade your style with our exclusive collection of trendy products.</p>
+                <a href="#product-grid" class="shop-now-btn">Shop Now</a>
+            </div>
+        </section>
+    
+        <!-- Featured Products Section -->
+        <div class="product-grid" id="product-grid">
+            <!-- Products will be loaded here by JavaScript -->
+            <div>
+                
+            </div>  
+                
+            </div>
+        </section>
+       
+        <!-- Product Categories Section -->
+    <section class="product-categories">
+        <h2>Shop by Category</h2>
+        <div class="category-grid">
+            <!-- T-Shirts -->
+            <div class="category-card">
+                <a href="t-shirts.html">
+                    <img src="assets/Shirt.png" alt="T-Shirts" width="60" height="60">
+                    <h3>T-Shirts</h3>
+                </a>
+            </div>
+            
+            <!-- Jeans -->
+            <div class="category-card">
+                <a href="jeans.html">
+                    <img src="assets/jeans.svg" alt="Jeans" width="60" height="60">
+                    <h3>Jeans</h3>
+                </a>
+            </div>
+            
+            <!-- Shoes -->
+            <div class="category-card">
+                <a href="shoes.html">
+                    <img src="assets/shoes.png" alt="Shoes" width="60" height="60">
+                    <h3>Shoes</h3>
+                </a>
+            </div>
+            
+            <!-- Shorts -->
+            <div class="category-card">
+                <a href="shorts.html">
+                    <img src="assets/short.png" alt="Shorts" width="60" height="60">
+                    <h3>Shorts</h3>
+                </a>
+            </div>
+        </div>
+    </section>
+     <!-- Promotional Banner Section -->
+     <section class="promo-banner">
+        <div class="promo-container">
+            <!-- Banner Image (You can change this) -->
+            <img src="assets/newarrival.jpg" alt="Summer Sale - Up to 70% OFF" class="promo-image">
+            
+            <!-- Badge (Optional) -->
+            <div class="promo-badge">
+                <span>Only@Sham Exclusive</span>
+            </div>
+            
+            <!-- Discount Text -->
+            <div class="promo-discount">
+                <span>UP TO 70% OFF</span>
+            </div>
+            
+            <!-- Event Dates (Optional) -->
+            <div class="promo-dates">
+                <span>JUN 10 – JUL 24, 2025</span>
+            </div>
+            
+            <!-- CTA Button -->
+            <a href="#product-grid" class="promo-button">Shop Now</a>
+        </div>
+    </section>
+         <!-- About Us Section -->
+         <section id="about-us" class="about-us">
+            <div class="about-content">
+                <div class="about-text">
+                    <h2>About Us</h2>
+                    <p class="intro">
+                        Welcome to <strong>E-Shop</strong>, your go-to destination for the latest trends in fashion, electronics, and lifestyle products. We are passionate about delivering high-quality products that inspire and empower our customers.
+                    </p>
+                    <p class="unique">
+                        What makes us unique is our commitment to sustainability, exceptional customer service, and a curated selection of products that cater to your every need. We believe in making shopping an enjoyable and seamless experience for everyone.
+                    </p>
+                </div>
+                <div class="about-image">
+                    <img src="assets/about us.jpg" alt="Our Team">
+                    <div class="image-overlay"></div>
+                </div>
+            </div>
+        </section>
+    
+    
+      <!-- Product Detail Modal -->
+    <div id="productModal" class="modal">
+        <span class="close-modal">&times;</span>
+        <div class="modal-content">
+            <div class="product-detail">
+                <div class="product-detail-images">
+                    <img id="modalProductImage" src="" alt="">
+                    <div id="quickViewSaleBadge" class="product-badge" style="display: none;">Sale</div>
+                </div>
+                <div class="product-detail-info">
+                    <h2 id="modalProductTitle">Product Title</h2>
+                    <div class="product-price-large" id="modalProductPrice">₱0.00</div>
+                    <p class="product-description" id="modalProductDescription">
+                        Product description will be loaded here.
+                    </p>
+                    <div class="product-options">
+                        <div class="option-group">
+                            <h4>Size</h4>
+                            <div class="size-options" id="quickViewSizes">
+                                <!-- Size options will be loaded here -->
+                            </div>
+                        </div>
+                    </div>
+                    <div class="detail-actions">
+                        <button class="btn" id="reserveInModal">Reserve Now</button>
+                        <button class="btn" id="addToCartBtn" style="background-color: var(--secondary-color); color: var(--dark-color);">Add to Cart</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Shop Reviews Section -->
+    <section id="shop-reviews" class="shop-reviews">
+        <h2>Customer Reviews</h2>
+        
+        <div class="reviews-container" id="reviews-container">
+            <!-- Reviews will be loaded here -->
+        </div>
+        
+        <div class="add-review">
+            <h3>Leave Your Review</h3>
+            <div class="rating">
+                <span>Rating:</span>
+                <div class="stars">
+                    <i class="far fa-star" data-rating="1"></i>
+                    <i class="far fa-star" data-rating="2"></i>
+                    <i class="far fa-star" data-rating="3"></i>
+                    <i class="far fa-star" data-rating="4"></i>
+                    <i class="far fa-star" data-rating="5"></i>
+                </div>
+                <span class="rating-text">0/5</span>
+            </div>
+            <textarea id="review-comment" placeholder="Share your experience..."></textarea>
+            <button id="submit-review" class="btn-primary">Submit Review</button>
+        </div>
+    </section>
+    <!-- Flash Sale Banner -->
+    <section id="flash-sale" class="flash-sale-section">
+        <div id="flash-sale-container" class="container">
+            <!-- Flash sale content will be loaded here by JavaScript -->
+        </div>
+    </section>
+        <script>
+            // Check if the user is logged in on page load
+            window.onload = function () {
+                const loggedInUser = localStorage.getItem("loggedInUser");
+                if (loggedInUser) {
+                    enableAddToCartButtons();
+                }
+            };
+        
+            // Enable "Add to Cart" buttons
+            function enableAddToCartButtons() {
+                const addToCartButtons = document.querySelectorAll(".add-to-cart");
+                addToCartButtons.forEach((button) => {
+                    button.disabled = false;
+                });
+            }
+        </script>
+        
+      
+    
+        <!-- Footer Section -->
+        <footer class="footer">
+            <div class="footer-content">
+                <!-- Footer Links -->
+                <div class="footer-links">
+                    <h3>Quick Links</h3>
+                    <ul>
+                        <li><a href="#">Privacy Policy</a></li>
+                        <li><a href="#">Terms & Conditions</a></li>
+                        <li><a href="#">Return Policy</a></li>
+                    </ul>
+                </div>
+    
+                <!-- Social Media Icons -->
+                <section id="Contact" div class="social-media">
+                    <h3>Follow Us</h3>
+                    <div class="social-icons">
+                        <a href="https://www.facebook.com/share/1FMLtsgqFB/?mibextid=qi2Omg" class="social-icon"><i class="fab fa-facebook-f"></i></a>
+                        <a href="#" class="social-icon"><i class="fab fa-instagram"></i></a>
+                        <a href="#" class="social-icon"><i class="fab fa-tiktok"></i></a>
+                    </div>
+                </div>
+            </div>
+    
+            <!-- Footer Bottom -->
+            <div class="footer-bottom">
+                <p>&copy; 2023 E-Shop. All rights reserved.</p>
+            </div>
+        </footer>
+    
+    
+
+    <script src="auth.js"></script>
+    <script src="script.js"></script>
+    <script src="shop-reviews.js"></script>
+    <script src="products.js"></script>
+    <script>
+        // Listen for product updates from admin
+        window.addEventListener('storage', function(e) {
+            if (e.key === 'products') {
+                loadProducts();
+            }
+        });
+
+        // Check if user is logged in on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            <?php if (isset($_SESSION['user_id'])): ?>
+                enableAddToCartButtons();
+            <?php endif; ?>
+        });
+    </script>
+</body>
+</html>

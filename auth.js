@@ -1,243 +1,124 @@
-import { 
-    API_BASE_URL,
-    AUTH_ENDPOINT, 
-    USERS_ENDPOINT,
-    CART_ENDPOINT 
-} from './config.js';
+// Initialize admin user on script load
+initializeAdminUser();
 
-// Token management
-function storeAuthData({ token, user }) {
-    sessionStorage.setItem('authToken', token); // Changed from localStorage
-    sessionStorage.setItem('loggedInUser', JSON.stringify(user));
+// Toggle sidebar
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    sidebar.style.right = sidebar.style.right === '0px' ? '-250px' : '0px';
 }
 
-function getAuthToken() {
-    return sessionStorage.getItem('authToken'); // Updated from localStorage
+// Add to signup form validation
+if (!email) {
+    showError('signup-email-error', 'Email is required');
+    isValid = false;
+} else if (!validateEmail(email)) {
+    showError('signup-email-error', 'Please enter a valid email');
+    isValid = false;
 }
 
-function clearAuthData() {
-    sessionStorage.removeItem('authToken'); // Updated from localStorage
-    sessionStorage.removeItem('loggedInUser'); // Updated from localStorage
-}
+// In auth.js signup function
+const address = document.getElementById('signup-address').value.trim();
+// Include in newUser object
+// Update the new user object
+const newUser = {
+    fullname,
+    phone,
+    email,
+    username,
+    password,
+    address,
+    reservations: []
+};
 
-function isLoggedIn() {
-    return !!getAuthToken();
-}
-
-async function refreshToken() {
-    try {
-        const response = await fetch(`${AUTH_ENDPOINT}refresh`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${getAuthToken()}`
-            }
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.message || 'Token refresh failed');
-        }
-
-        const { token } = await response.json();
-        sessionStorage.setItem('authToken', token); // Updated from localStorage
-        return true;
-    } catch (error) {
-        console.error('Token refresh failed:', error);
-        clearAuthData();
+function registerUser(fullname, username, email, phone, password, gender = '') {
+    const users = JSON.parse(localStorage.getItem('users')) || [];
+    
+    if (users.some(user => user.username === username)) {
+        alert('Username already exists');
         return false;
     }
+    
+    if (users.some(user => user.email === email)) {
+        alert('Email already registered');
+        return false;
+    }
+    
+    const newUser = {
+        fullname,
+        username,
+        email,
+        phone,
+        password,
+        gender,
+        profilePicture: '',
+        reservations: []
+    };
+    
+    users.push(newUser);
+    localStorage.setItem('users', JSON.stringify(users));
+    return true;
 }
 
-async function getCSRFToken() {
-    const response = await fetch(`${AUTH_ENDPOINT}csrf-token`, {
-        credentials: 'include'
-    });
-    const { token } = await response.json();
-    return token;
-}
-
-// Enhanced fetch with token refresh and CSRF token
-async function authFetch(url, options = {}) {
-    options.headers = options.headers || {};
-    options.headers['Authorization'] = `Bearer ${getAuthToken()}`;
-    
-    // Add CSRF token for non-GET requests
-    if (options.method && options.method !== 'GET') {
-        options.headers['X-CSRF-Token'] = await getCSRFToken();
-    }
-
-    let response = await fetch(url, options);
-    
-    // If token expired, try to refresh and retry
-    if (response.status === 401) {
-        const refreshed = await refreshToken();
-        if (refreshed) {
-            options.headers['Authorization'] = `Bearer ${getAuthToken()}`;
-            response = await fetch(url, options);
-        } else {
-            clearAuthData();
-            window.location.href = 'login.html?session=expired';
-            return;
-        }
-    }
-    
-    return response;
-}
-
-// User authentication
-async function registerUser(fullname, username, email, phone, password, gender = '') {
-    // Add validation
-    if (!fullname || !username || !email || !password) {
-        return { success: false, error: 'All required fields must be filled' };
-    }
-    
-    if (password.length < 8) {
-        return { success: false, error: 'Password must be at least 8 characters' };
-    }
-    
-    if (!/^\S+@\S+\.\S+$/.test(email)) {
-        return { success: false, error: 'Invalid email format' };
-    }
-
-    try {
-        const response = await fetch(`${AUTH_ENDPOINT}register`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                fullname,
-                username,
-                email,
-                phone,
-                password,
-                gender
-            })
-        });
-
-        const data = await response.json();
+// Add this function to auth.js
+function checkUserBanStatus() {
+    const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
+    if (loggedInUser) {
+        const users = JSON.parse(localStorage.getItem('users')) || [];
+        const currentUser = users.find(u => u.username === loggedInUser.username);
         
-        if (!response.ok) {
-            throw new Error(data.message || 'Registration failed');
-        }
-
-        storeAuthData(data);
-        return { success: true, data };
-    } catch (error) {
-        console.error('Registration error:', error);
-        return { success: false, error: error.message };
-    }
-}
-
-async function loginUser(username, password) {
-    try {
-        const response = await fetch(`${AUTH_ENDPOINT}login`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ username, password })
-        });
-
-        const data = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(data.message || 'Login failed');
-        }
-
-        storeAuthData(data);
-        return { success: true, data };
-    } catch (error) {
-        console.error('Login error:', error);
-        return { success: false, error: error.message };
-    }
-}
-
-async function checkUserBanStatus() {
-    const loggedInUser = JSON.parse(sessionStorage.getItem('loggedInUser')); // Updated from localStorage
-    const token = getAuthToken();
-    if (!loggedInUser || !token) return false;
-
-    try {
-        const response = await authFetch(`${USERS_ENDPOINT}${loggedInUser.username}/status`);
-        
-        if (!response.ok) {
-            throw new Error('Failed to check user status');
-        }
-
-        const { banned } = await response.json();
-        if (banned) {
-            clearAuthData();
+        if (currentUser?.banned) {
+            localStorage.removeItem('loggedInUser');
             window.location.href = 'login.html?banned=true';
             return false;
         }
-        return true;
-    } catch (error) {
-        console.error('Error checking ban status:', error);
-        return true;
     }
+    return true;
 }
 
-function logoutUser() {
-    clearAuthData();
-    window.location.href = 'login.html';
-}
+// Add this to the top of profile.js, cart.js, and other protected pages
+document.addEventListener('DOMContentLoaded', function() {
+    if (!checkUserBanStatus()) return;
+    // Rest of your existing code
+});
 
-// UI Functions
 function setupLoginLogout() {
-    const loggedInUser = JSON.parse(sessionStorage.getItem('loggedInUser')); // Updated from localStorage
-    const loginLink = document.getElementById('login-logout-link');
-    
-    if (!loginLink) return;
-    
-    if (loggedInUser) {
-        loginLink.textContent = 'Logout';
-        loginLink.href = '#';
-        loginLink.onclick = function(e) {
-            e.preventDefault();
-            logoutUser();
-        };
-    } else {
-        loginLink.textContent = 'Login';
-        loginLink.href = 'login.html';
-        loginLink.onclick = null;
+    try {
+        const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
+        const loginLink = document.getElementById('login-logout-link');
+        
+        if (!loginLink) return;
+        
+        if (loggedInUser) {
+            loginLink.textContent = 'Logout';
+            loginLink.href = 'login.html';
+            loginLink.onclick = function(e) {
+                e.preventDefault();
+                localStorage.removeItem('loggedInUser');
+                window.location.href = 'index.html';
+            };
+        } else {
+            loginLink.textContent = 'Login';
+            loginLink.href = 'login.html';
+            loginLink.onclick = null;
+        }
+    } catch (error) {
+        console.error('Error setting up login/logout:', error);
     }
 }
 
-function updateCartCount() {
-    const loggedInUser = JSON.parse(sessionStorage.getItem('loggedInUser')); // Updated from localStorage
-    const cartCountElements = document.querySelectorAll('.cart-count');
-    
-    if (!loggedInUser) {
-        cartCountElements.forEach(el => el.textContent = '0');
-        return;
+function initializeAdminUser() {
+    const admins = JSON.parse(localStorage.getItem('adminUsers')) || [];
+    if (!admins.some(u => u.username === 'admin')) {
+        admins.push({
+            username: "admin",
+            password: "admin123",
+            adminCode: "Rimuru123",
+            fullname: "System Administrator",
+            email: "admin@onlyatsham.com",
+            phone: "1234567890",
+            is_admin: true
+        });
+        localStorage.setItem('adminUsers', JSON.stringify(admins));
+        console.log('Admin user initialized');
     }
-
-    authFetch(`${CART_ENDPOINT}count`)
-    .then(response => {
-        if (!response.ok) throw new Error('Failed to get cart count');
-        return response.json();
-    })
-    .then(({ count }) => {
-        cartCountElements.forEach(el => el.textContent = count || '0');
-    })
-    .catch(error => {
-        console.error('Error updating cart count:', error);
-        cartCountElements.forEach(el => el.textContent = '0');
-    });
 }
-
-export {
-    storeAuthData,
-    getAuthToken,
-    clearAuthData,
-    isLoggedIn,
-    refreshToken,
-    authFetch,
-    registerUser,
-    loginUser,
-    checkUserBanStatus,
-    logoutUser,
-    setupLoginLogout,
-    updateCartCount
-};
