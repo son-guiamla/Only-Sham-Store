@@ -7,7 +7,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="profile.css">
     <link rel="stylesheet" href="styles.css">
-
 </head>
 <body>
     <nav class="navbar">
@@ -28,18 +27,17 @@
         <!-- Icons -->
         <div class="nav-icons">
             <a href="cart.html" class="cart-icon"><i class="fas fa-shopping-cart"></i> <sup><span id="cart-count">0</span></sup></a>
-            
             <div class="settings-icon" onclick="toggleSidebar()">
                 <i class="fas fa-ellipsis-v"></i>
             </div>
         </div>
 
-         <!-- Sidebar -->
-         <div class="sidebar" id="sidebar">
+        <!-- Sidebar -->
+        <div class="sidebar" id="sidebar">
             <a href="#" class="close-btn" onclick="toggleSidebar()">&times;</a>
             <a href="login.html" id="login-logout-link">Login</a>
-            <a href="#">Settings</a>
-            <a href="#">Help</a>
+            <a href="#" class="sidebar-link settings-link">Settings</a>
+            <a href="#" class="sidebar-link help-link">Help</a>
         </div>
     </nav>
 
@@ -53,10 +51,10 @@
                 <div class="profile-picture-container">
                     <div class="profile-picture-wrapper">
                         <img id="profile-picture" src="assets/default-profile.png" alt="Profile Picture">
-                        <label for="profile-upload" class="upload-btn">
+                        <label for="profile-picture-upload" class="upload-btn">
                             <i class="fas fa-camera"></i>
                         </label>
-                        <input type="file" id="profile-upload" accept="image/*" style="display: none;">
+                        <input type="file" id="profile-picture-upload" accept="image/*" style="display: none;">
                     </div>
                     <button id="remove-picture-btn" class="btn-secondary">Remove Picture</button>
                 </div>
@@ -104,35 +102,34 @@
                                 <option value="prefer-not-to-say">Prefer not to say</option>
                             </select>
                         </div>
-                        <button type="submit" class="btn-primary">Save Changes</button>
+                        <button type="button" class="btn-primary" onclick="updatePersonalInfo()">Save Changes</button>
                     </form>
                 </div>
 
                 <!-- Security Section -->
-<div class="profile-section" id="security-section">
-    <h2>Security</h2>
-    <form id="security-form">
-        <div class="form-group">
-            <label for="current-password">Current Password</label>
-            <input type="password" id="current-password" class="input-field" required>
-        </div>
-        <div class="form-group">
-            <label for="new-password">New Password</label>
-            <input type="password" id="new-password" class="input-field" required>
-        </div>
-        <div class="form-group">
-            <label for="confirm-password">Confirm New Password</label>
-            <input type="password" id="confirm-password" class="input-field" required>
-        </div>
-        <button type="submit" class="btn-primary">Update Password</button>
-    </form>
-</div>
+                <div class="profile-section" id="security-section">
+                    <h2>Security</h2>
+                    <form id="security-form">
+                        <div class="form-group">
+                            <label for="current-password">Current Password</label>
+                            <input type="password" id="current-password" class="input-field" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="new-password">New Password</label>
+                            <input type="password" id="new-password" class="input-field" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="confirm-password">Confirm New Password</label>
+                            <input type="password" id="confirm-password" class="input-field" required>
+                        </div>
+                        <button type="button" class="btn-primary" onclick="updatePassword()">Update Password</button>
+                    </form>
+                </div>
 
                 <!-- Reservations Section -->
                 <div class="profile-section" id="reservations-section">
                     <h2>My Reservations</h2>
                     <div class="reservations-list" id="reservations-list">
-                        <!-- Reservations will be loaded here -->
                         <p class="empty-message">You have no active reservations.</p>
                     </div>
                 </div>
@@ -168,7 +165,6 @@
             <p>&copy; 2023 Only@Sham. All rights reserved.</p>
         </div>
     </footer>
-    
 
     <script src="auth.js"></script>
     <script src="profile.js"></script>

@@ -1,188 +1,107 @@
-document.addEventListener('DOMContentLoaded', function() {
-    // Get the current page's category
-    const path = window.location.pathname;
-    let category = null;
-    
-    if (path.includes('t-shirts.html')) {
-        category = 'T-Shirts';
-    } else if (path.includes('jeans.html')) {
-        category = 'Jeans';
-    } else if (path.includes('shoes.html')) {
-        category = 'Shoes';
-    } else if (path.includes('shorts.html')) {
-        category = 'Shorts';
-    }
-    
-    // Initialize default products if none exist
-    initializeDefaultProducts();
-    
-    // Load products with optional category filter
-    loadProducts(category);
-    updateCartCount();
-    displayActiveFlashSales();
-    
-    // Listen for changes in products data
-    window.addEventListener('storage', function(e) {
-        if (e.key === 'products' || e.key === 'flashSales') {
-            loadProducts(category);
-            displayActiveFlashSales();
+import { 
+    PRODUCTS_ENDPOINT,
+    DISCOUNTS_ENDPOINT,
+    CART_ENDPOINT
+} from './config.js';
+import { 
+    setupLoginLogout, 
+    updateCartCount, 
+    isLoggedIn,
+    authFetch
+} from './auth.js';
+
+document.addEventListener('DOMContentLoaded', async function() {
+    try {
+        const path = window.location.pathname;
+        let category = null;
+        
+        if (path.includes('t-shirts.html')) category = 'T-Shirts';
+        else if (path.includes('jeans.html')) category = 'Jeans';
+        else if (path.includes('shoes.html')) category = 'Shoes';
+        else if (path.includes('shorts.html')) category = 'Shorts';
+        
+        await loadProducts(category);
+        updateCartCount();
+        setupLoginLogout();
+        displayActiveFlashSales();
+    } catch (error) {
+        console.error('Initialization error:', error);
+        const productGrid = document.getElementById('product-grid');
+        if (productGrid) {
+            productGrid.innerHTML = `<div class="error">${error.message || 'Failed to load products'}</div>`;
         }
-    });
+    }
 });
 
-function loadProducts(category = null) {
+async function loadProducts(category = null) {
     const productGrid = document.getElementById('product-grid');
     if (!productGrid) return;
     
+    productGrid.innerHTML = '<div class="loading">Loading products...</div>';
+    
     try {
-        let products = JSON.parse(localStorage.getItem('products')) || [];
+        let url = PRODUCTS_ENDPOINT;
+        if (category) url += `?category=${encodeURIComponent(category)}`;
         
-        // Filter out deleted products
-        products = products.filter(product => !product.deleted);
+        const response = await fetch(url);
         
-        // Filter by category if specified (not on main shop page)
-        if (category) {
-            products = products.filter(product => product.category === category);
-        } else if (window.location.pathname.includes('index.html')) {
-            // For main shop page, show featured products only
+        // Modify the error handling in loadProducts
+        if (!response.ok) {
+            const error = await response.json();
+            const errorMessage = error.message || 'Failed to load products';
+            productGrid.innerHTML = `
+                <div class="error">
+                    <i class="fas fa-exclamation-circle"></i>
+                    ${errorMessage}
+                    <button onclick="window.location.reload()">Retry</button>
+                </div>
+            `;
+            throw new Error(errorMessage);
+        }
+        
+        let products = await response.json();
+        
+        if (window.location.pathname.includes('index.html')) {
             products = products.filter(product => product.featured);
         }
         
-        // Apply any active discounts
-        products = applyDiscounts(products);
-        
-        if (products.length === 0) {
-            productGrid.innerHTML = `<div class="empty">No products available in this category</div>`;
-            return;
-        }
-        
+        products = await applyDiscounts(products);
         renderProducts(products);
     } catch (error) {
         console.error('Error loading products:', error);
-        productGrid.innerHTML = `<div class="empty">Error loading products. Please try again.</div>`;
+        productGrid.innerHTML = `<div class="error">${error.message}</div>`;
     }
 }
 
-function initializeDefaultProducts() {
+async function applyDiscounts(products) {
     try {
-        let products = JSON.parse(localStorage.getItem('products'));
+        const response = await fetch(`${DISCOUNTS_ENDPOINT}active`);
         
-        // If no products exist or it's not an array, create default products
-        if (!products || !Array.isArray(products)) {
-            products = [
-                {
-                    id: 'prod1',
-                    name: 'Classic White T-Shirt',
-                    price: 299.99,
-                    category: 'T-Shirts',
-                    image: 'assets/Shirt.png',
-                    sizes: { 'S': 10, 'M': 15, 'L': 8, 'XL': 5 },
-                    description: 'A comfortable classic white t-shirt',
-                    featured: true,
-                    deleted: false
-                },
-                {
-                    id: 'prod2',
-                    name: 'Slim Fit Jeans',
-                    price: 799.99,
-                    category: 'Jeans',
-                    image: 'assets/jeans.svg',
-                    sizes: { '28': 5, '30': 8, '32': 10, '34': 7 },
-                    description: 'Modern slim fit jeans',
-                    featured: true,
-                    deleted: false
-                },
-                {
-                    id: 'prod3',
-                    name: 'Running Shoes',
-                    price: 1299.99,
-                    category: 'Shoes',
-                    image: 'assets/shoes.png',
-                    sizes: { '7': 8, '8': 10, '9': 12, '10': 6 },
-                    description: 'Comfortable running shoes',
-                    featured: true,
-                    deleted: false
-                },
-                {
-                    id: 'prod4',
-                    name: 'Casual Shorts',
-                    price: 499.99,
-                    category: 'Shorts',
-                    image: 'assets/short.png',
-                    sizes: { 'S': 10, 'M': 15, 'L': 8, 'XL': 5 },
-                    description: 'Comfortable casual shorts',
-                    featured: true,
-                    deleted: false
-                }
-            ];
-            
-            localStorage.setItem('products', JSON.stringify(products));
-        }
-    } catch (error) {
-        console.error('Error initializing default products:', error);
-    }
-}
-
-function applyDiscounts(products) {
-    try {
-        const flashSales = JSON.parse(localStorage.getItem('flashSales')) || [];
-        const now = new Date();
+        if (!response.ok) return products;
         
-        // Get active flash sales
-        const activeFlashSales = flashSales.filter(sale => {
-            const start = new Date(sale.startTime);
-            const end = new Date(sale.endTime);
-            return now >= start && now <= end;
-        });
-
-        // If no active flash sales, return original products
-        if (activeFlashSales.length === 0) return products;
-
+        const discounts = await response.json();
+        if (!discounts.length) return products;
+        
         return products.map(product => {
-            let bestDiscount = 0;
-            let discountType = '';
-            let discountText = '';
+            const discount = discounts.find(d => 
+                d.scope === 'all' ||
+                (d.scope === 'categories' && d.categories.includes(product.category)) ||
+                (d.scope === 'products' && d.products.includes(product.id))
+            );
             
-            // Check all active flash sales for this product
-            activeFlashSales.forEach(sale => {
-                let isIncluded = false;
-                
-                if (sale.scope === 'products' && sale.products) {
-                    isIncluded = sale.products.includes(product.id);
-                } else if (sale.scope === 'categories' && sale.categories) {
-                    isIncluded = sale.categories.includes(product.category);
-                } else if (sale.scope === 'all') {
-                    isIncluded = true;
-                }
-                
-                if (isIncluded) {
-                    const discountValue = sale.discountValue;
-                    if (discountValue > bestDiscount) {
-                        bestDiscount = discountValue;
-                        discountType = sale.discountType;
-                        discountText = sale.name || 'FLASH SALE';
-                    }
-                }
-            });
+            if (!discount) return product;
             
-            // Apply the best discount found
-            if (bestDiscount > 0) {
-                const discountedProduct = {...product};
-                discountedProduct.originalPrice = product.price;
-                
-                if (discountType === 'percentage') {
-                    discountedProduct.price = product.price * (1 - (bestDiscount / 100));
-                    discountedProduct.discountText = discountText;
-                } else {
-                    discountedProduct.price = Math.max(0, product.price - bestDiscount);
-                    discountedProduct.discountText = discountText;
-                }
-                
-                discountedProduct.discountSource = 'flashsale';
-                return discountedProduct;
+            const discounted = { ...product };
+            discounted.originalPrice = product.price;
+            
+            if (discount.discountType === 'percentage') {
+                discounted.price = product.price * (1 - discount.discountValue / 100);
+            } else {
+                discounted.price = Math.max(0, product.price - discount.discountValue);
             }
             
-            return product;
+            discounted.discountText = discount.name || `${discount.discountValue}% OFF`;
+            return discounted;
         });
     } catch (error) {
         console.error('Error applying discounts:', error);
@@ -194,298 +113,177 @@ function renderProducts(products) {
     const productGrid = document.getElementById('product-grid');
     if (!productGrid) return;
     
+    if (!products.length) {
+        productGrid.innerHTML = '<div class="empty">No products found</div>';
+        return;
+    }
+    
     productGrid.innerHTML = '';
     
-    products.forEach((product, index) => {
-        const sizes = product.sizes ? Object.keys(product.sizes).filter(size => product.sizes[size] > 0) : [];
-        const totalQuantity = product.sizes ? 
-            Object.values(product.sizes).reduce((sum, qty) => sum + (qty || 0), 0) : 0;
-        
-        // Build price display with proper discount information
-        let priceDisplay = '';
-        if (product.originalPrice) {
-            const discountPercentage = Math.round((1 - (product.price / product.originalPrice)) * 100);
-            priceDisplay = `
-                <p class="original-price">₱${product.originalPrice.toFixed(2)}</p>
-                <p class="price discounted">₱${product.price.toFixed(2)} 
-                    <span class="discount-badge ${product.discountSource === 'flashsale' ? 'flashsale' : ''}">
-                        ${product.discountText || `${discountPercentage}% OFF`}
-                    </span>
-                </p>
-            `;
-        } else {
-            priceDisplay = `<p class="price">₱${product.price.toFixed(2)}</p>`;
-        }
-        
+    products.forEach(product => {
+        const availableSizes = product.sizes 
+            ? Object.entries(product.sizes)
+                .filter(([_, qty]) => qty > 0)
+                .map(([size]) => size)
+            : [];
+            
         const productCard = document.createElement('div');
         productCard.className = 'product-card';
         productCard.innerHTML = `
             <div class="product-image-container">
-                <img src="${product.image || 'assets/default-product.jpg'}" 
-                     alt="${product.name}" 
+                <img src="<span class="math-inline">\{product\.image \|\| 'assets/default\-product\.jpg'\}" 
+alt\="</span>{product.name}" 
                      class="product-image"
-                     onerror="this.onerror=null;this.src='assets/default-product.jpg'">
+                     onerror="this.src='assets/default-product.jpg'">
                 ${product.featured ? '<span class="featured-badge">Featured</span>' : ''}
-                ${product.originalPrice ? '<span class="discount-flag">SALE</span>' : ''}
-                <button class="quick-view-btn" data-id="${product.id}">
+                <span class="math-inline">\{product\.originalPrice ? '<span class\="discount\-flag"\>SALE</span\>' \: ''\}
+<button class\="quick\-view\-btn" data\-id\="</span>{product.id}">
                     <i class="fas fa-eye"></i> Quick View
                 </button>
             </div>
             <h3>${product.name}</h3>
-            ${priceDisplay}
-            <p class="quantity">Quantity: ${totalQuantity}</p>
+            ${product.originalPrice ? `
+                <p class="original-price">₱${product.originalPrice.toFixed(2)}</p>
+                <p class="price discounted">₱${product.price.toFixed(2)}
+                    <span class="discount-badge">${product.discountText}</span>
+                </p>
+            ` : `<p class="price">₱${product.price.toFixed(2)}</p>`}
             <div class="size-selection">
-                <label for="size-${index}">Size:</label>
-                <select id="size-${index}" class="size-dropdown" ${sizes.length === 0 ? 'disabled' : ''}>
-                    ${sizes.length > 0 ? 
-                        sizes.map(size => `<option value="${size}">${size}</option>`).join('') : 
-                        '<option value="">Out of stock</option>'}
+                <select class="size-dropdown" ${!availableSizes.length ? 'disabled' : ''}>
+                    ${availableSizes.length 
+                        ? availableSizes.map(size => `<option value="${size}">${size}</option>`).join('')
+                        : '<option>Out of stock</option>'}
                 </select>
             </div>
-            <button class="add-to-cart" data-id="${product.id}" ${sizes.length === 0 ? 'disabled' : ''}>
-                ${sizes.length === 0 ? 'Out of stock' : 'Add to Cart'}
+            <button class="add-to-cart" data-id="${product.id}" ${!availableSizes.length ? 'disabled' : ''}>
+                ${!availableSizes.length ? 'Out of stock' : 'Add to Cart'}
             </button>
         `;
         
         productGrid.appendChild(productCard);
     });
     
-    // Add event listeners to all add-to-cart buttons
-    document.querySelectorAll('.add-to-cart').forEach(button => {
-        button.addEventListener('click', function() {
-            const productId = this.getAttribute('data-id');
-            const productCard = this.closest('.product-card');
-            const sizeSelect = productCard.querySelector('.size-dropdown');
-            const size = sizeSelect ? sizeSelect.value : 'S';
-            addToCart(productId, size);
-        });
-    });
-    
-    // Add event listeners to quick view buttons
-    document.querySelectorAll('.quick-view-btn').forEach(button => {
-        button.addEventListener('click', function(e) {
-            e.stopPropagation();
-            const productId = this.getAttribute('data-id');
-            openQuickView(productId);
+    // Add event listeners
+    document.querySelectorAll('.add-to-cart').forEach(btn => {
+        btn.addEventListener('click', async function() {
+            if (!isLoggedIn()) {
+                const confirmLogin = confirm('Please login to add items to cart. Login now?');
+                if (confirmLogin) window.location.href = 'login.html';
+                return;
+            }
+            
+            const productId = this.dataset.id;
+            const size = this.closest('.product-card').querySelector('.size-dropdown').value;
+            await addToCart(productId, size);
         });
     });
 }
 
-function addToCart(productId, size) {
+async function addToCart(productId, size) {
     try {
-        const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
-        if (!loggedInUser) {
-            const confirmLogin = confirm('You need to login to add items to cart. Would you like to login now?');
-            if (confirmLogin) {
-                window.location.href = 'login.html';
-            }
-            return;
-        }
-        
-        const products = JSON.parse(localStorage.getItem('products')) || [];
-        const product = products.find(p => p.id === productId);
-        
-        if (!product) {
-            alert('Product not found');
-            return;
-        }
-        
-        // Check if size is available
-        if (!product.sizes || !product.sizes[size] || product.sizes[size] <= 0) {
-            alert('Selected size is out of stock');
-            return;
-        }
-        
-        // Get or initialize user's cart
-        const users = JSON.parse(localStorage.getItem('users')) || [];
-        const userIndex = users.findIndex(u => u.username === loggedInUser.username);
-        
-        if (userIndex === -1) return;
-        
-        if (!users[userIndex].cart) {
-            users[userIndex].cart = [];
-        }
-        
-        // Check if product already in cart
-        const existingItemIndex = users[userIndex].cart.findIndex(
-            item => item.productId === productId && item.size === size && (!item.status || item.status === 'pending')
-        );
-        
-        if (existingItemIndex !== -1) {
-            // Check if we have enough stock
-            if (product.sizes[size] <= users[userIndex].cart[existingItemIndex].quantity) {
-                alert(`Only ${product.sizes[size]} items left in stock for this size!`);
-                return;
-            }
-            
-            users[userIndex].cart[existingItemIndex].quantity += 1;
-        } else {
-            // Add new item to cart
-            users[userIndex].cart.push({
-                productId,
-                name: product.name,
-                price: product.price,
-                image: product.image || 'assets/default-product.jpg',
-                size,
-                quantity: 1,
-                status: 'pending',
-                reservedAt: new Date().toISOString()
-            });
-        }
-        
-        // Update product stock
-        const productIndex = products.findIndex(p => p.id === productId);
-        if (productIndex !== -1 && products[productIndex].sizes) {
-            products[productIndex].sizes[size] -= 1;
-            localStorage.setItem('products', JSON.stringify(products));
-        }
-        
-        localStorage.setItem('users', JSON.stringify(users));
-        
-        // Update loggedInUser data
-        const updatedUser = users[userIndex];
-        localStorage.setItem('loggedInUser', JSON.stringify(updatedUser));
-        
-        updateCartCount();
-        loadProducts(); // Refresh product display
-        
-        // Show success feedback
         const button = document.querySelector(`.add-to-cart[data-id="${productId}"]`);
         if (button) {
-            const originalText = button.textContent;
+            button.disabled = true;
+            button.textContent = 'Adding...';
+        }
+        
+        const response = await authFetch(`${CART_ENDPOINT}add`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ productId, size, quantity: 1 })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message);
+        }
+        
+        updateCartCount();
+        
+        // Visual feedback
+        if (button) {
             button.textContent = 'Added!';
             button.style.backgroundColor = '#4CAF50';
             setTimeout(() => {
-                button.textContent = originalText;
+                button.textContent = 'Add to Cart';
                 button.style.backgroundColor = '';
+                button.disabled = false;
             }, 2000);
         }
     } catch (error) {
         console.error('Error adding to cart:', error);
-        alert('An error occurred while adding to cart');
-    }
-}
-
-function updateCartCount() {
-    try {
-        const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
-        if (!loggedInUser) return;
-        
-        const users = JSON.parse(localStorage.getItem('users')) || [];
-        const user = users.find(u => u.username === loggedInUser.username);
-        
-        if (user && user.cart) {
-            const totalItems = user.cart.filter(item => !item.status || item.status === 'pending')
-                                      .reduce((sum, item) => sum + item.quantity, 0);
-            const cartCountElements = document.querySelectorAll('#cart-count');
-            cartCountElements.forEach(element => {
-                element.textContent = totalItems;
-            });
+        alert(error.message);
+        const button = document.querySelector(`.add-to-cart[data-id="${productId}"]`);
+        if (button) {
+            button.textContent = 'Add to Cart';
+            button.disabled = false;
         }
-    } catch (error) {
-        console.error('Error updating cart count:', error);
     }
 }
 
-function displayActiveFlashSales() {
+async function displayActiveFlashSales() {
     try {
-        const flashSales = JSON.parse(localStorage.getItem('flashSales')) || [];
-        const now = new Date();
+        const response = await fetch(`${DISCOUNTS_ENDPOINT}active`);
         
-        // Filter active flash sales
-        const activeSales = flashSales.filter(sale => {
-            const start = new Date(sale.startTime);
-            const end = new Date(sale.endTime);
-            return now >= start && now <= end;
-        });
+        if (!response.ok) {
+            throw new Error('Failed to load flash sales');
+        }
         
-        const flashSaleContainer = document.getElementById('flash-sale-container');
-        if (!flashSaleContainer) return;
+        const sales = await response.json();
+        const container = document.getElementById('flash-sale-container');
+        if (!container) return;
         
-        if (activeSales.length === 0) {
-            flashSaleContainer.innerHTML = `
-                <div class="no-flash-sale">
-                    <h3>No Active Flash Sales</h3>
-                    <p>Check back later for exciting deals!</p>
-                </div>
-            `;
+        if (!sales.length) {
+            container.innerHTML = '<div class="no-sales">No active flash sales</div>';
             return;
         }
         
-        // For each active sale, create a banner
-        let html = '';
-        activeSales.forEach(sale => {
-            const endDate = new Date(sale.endTime);
-            const timeLeft = endDate - now;
-            
-            html += `
-                <div class="flash-sale-active" data-end="${sale.endTime}">
-                    <h1>${sale.name}</h1>
-                    <h2>${sale.discountType === 'percentage' ? 
-                        `${sale.discountValue}% OFF` : 
-                        `₱${sale.discountValue} OFF`}</h2>
-                    <div class="discount">Limited Time Offer!</div>
-                    <div class="time-left">Ends in:</div>
-                    <div class="countdown-timer">
-                        <div class="timer-box">
-                            <span class="days">00</span>
-                            <span class="timer-label">Days</span>
-                        </div>
-                        <div class="timer-box">
-                            <span class="hours">00</span>
-                            <span class="timer-label">Hours</span>
-                        </div>
-                        <div class="timer-box">
-                            <span class="minutes">00</span>
-                            <span class="timer-label">Minutes</span>
-                        </div>
-                        <div class="timer-box">
-                            <span class="seconds">00</span>
-                            <span class="timer-label">Seconds</span>
-                        </div>
-                    </div>
-                    <a href="#product-grid" class="shop-now-btn">Shop Now</a>
+        container.innerHTML = sales.map(sale => `
+            <div class="flash-sale" data-end="<span class="math-inline">\{sale\.endTime\}"\>
+<h2\></span>{sale.name}</h2>
+                <p>${sale.discountType === 'percentage' 
+                    ? `${sale.discountValue}% OFF` 
+                    : `₱${sale.discountValue} OFF`}</p>
+                <div class="countdown">
+                    <span class="days">00</span>d 
+                    <span class="hours">00</span>h 
+                    <span class="minutes">00</span>m
                 </div>
-            `;
-        });
+                <a href="#product-grid" class="btn">Shop Now</a>
+            </div>
+        `).join('');
         
-        flashSaleContainer.innerHTML = html;
-        
-        // Initialize countdown timers
-        initializeCountdownTimers();
+        initializeCountdowns();
     } catch (error) {
         console.error('Error displaying flash sales:', error);
     }
 }
 
-function initializeCountdownTimers() {
-    const flashSaleElements = document.querySelectorAll('.flash-sale-active');
-    
-    flashSaleElements.forEach(element => {
-        const endTime = new Date(element.getAttribute('data-end')).getTime();
+function initializeCountdowns() {
+    document.querySelectorAll('.flash-sale').forEach(saleEl => {
+        const endTime = new Date(saleEl.dataset.end).getTime();
         
-        function updateTimer() {
+        const updateTimer = () => {
             const now = new Date().getTime();
-            const distance = endTime - now;
+            const diff = endTime - now;
             
-            if (distance < 0) {
-                clearInterval(timer);
-                element.innerHTML = '<h3>Flash Sale Ended</h3>';
+            if (diff <= 0) {
+                saleEl.querySelector('.countdown').innerHTML = 'Sale ended';
                 return;
             }
             
-            const days = Math.floor(distance / (1000 * 60 * 60 * 24));
-            const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-            const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
             
-            element.querySelector('.days').textContent = days.toString().padStart(2, '0');
-            element.querySelector('.hours').textContent = hours.toString().padStart(2, '0');
-            element.querySelector('.minutes').textContent = minutes.toString().padStart(2, '0');
-            element.querySelector('.seconds').textContent = seconds.toString().padStart(2, '0');
-        }
+            saleEl.querySelector('.days').textContent = days.toString().padStart(2, '0');
+            saleEl.querySelector('.hours').textContent = hours.toString().padStart(2, '0');
+            saleEl.querySelector('.minutes').textContent = minutes.toString().padStart(2, '0');
+        };
         
         updateTimer();
-        const timer = setInterval(updateTimer, 1000);
+        setInterval(updateTimer, 60000);
     });
 }

@@ -375,61 +375,15 @@
             opacity: 0.8;
         }
 
-        /* Updated Checkbox Styles */
+        /* Checkbox styles for flash sale */
         .admin-checkbox-item {
+            margin-bottom: 8px;
             display: flex;
             align-items: center;
-            gap: 10px;
-            padding: 8px 0;
         }
 
-        .admin-checkbox-item input[type="checkbox"] {
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            appearance: none;
-            width: 18px;
-            height: 18px;
-            border: 2px solid var(--admin-gray);
-            border-radius: 3px;
-            outline: none;
-            cursor: pointer;
-            position: relative;
-            transition: all 0.2s;
-        }
-
-        .admin-checkbox-item input[type="checkbox"]:checked {
-            background-color: var(--admin-primary);
-            border-color: var(--admin-primary);
-        }
-
-        .admin-checkbox-item input[type="checkbox"]:checked::after {
-            content: '';
-            position: absolute;
-            left: 5px;
-            top: 1px;
-            width: 5px;
-            height: 10px;
-            border: solid white;
-            border-width: 0 2px 2px 0;
-            transform: rotate(45deg);
-        }
-
-        .admin-checkbox-item label {
-            cursor: pointer;
-            user-select: none;
-        }
-
-        .product-name {
-            font-weight: 500;
-            color: var(--admin-dark);
-        }
-
-        .product-category {
-            color: var(--admin-gray);
-            font-size: 0.85rem;
-            background-color: rgba(108, 117, 125, 0.1);
-            padding: 3px 8px;
-            border-radius: 4px;
+        .admin-checkbox-item input {
+            margin-right: 8px;
         }
 
         /* Responsive Design */
@@ -463,6 +417,52 @@
                 display: none;
             }
         }
+    /* Add this to your existing styles in admin-dashboard.html */
+    #products-checkboxes {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .admin-checkbox-item {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        padding: 8px 12px;
+        border-radius: 4px;
+        transition: background-color 0.2s;
+    }
+
+    .admin-checkbox-item:hover {
+        background-color: rgba(74, 107, 255, 0.05);
+    }
+
+    .admin-checkbox-item input {
+        margin: 0;
+        flex-shrink: 0;
+    }
+
+    .admin-checkbox-item label {
+        display: flex;
+        flex-grow: 1;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
+    }
+
+    .product-name {
+        font-weight: 500;
+        color: var(--admin-dark);
+    }
+
+    .product-category {
+        color: var(--admin-gray);
+        font-size: 0.85rem;
+        background-color: rgba(108, 117, 125, 0.1);
+        padding: 3px 8px;
+        border-radius: 4px;
+    }
+</style>
     </style>
 </head>
 <body class="admin-body">
@@ -722,9 +722,9 @@
                     <textarea id="product-description" rows="3"></textarea>
                 </div>
                 <div class="admin-form-group">
-                    <label class="admin-checkbox-item">
+                    <label>
                         <input type="checkbox" id="product-featured"> 
-                        <span>Feature this product on main shop page</span>
+                        Feature this product on main shop page
                     </label>
                 </div>
                 <div class="admin-form-group">

@@ -24,14 +24,14 @@
 
         <!-- Search Bar -->
         <div class="search-bar">
-            <input type="text" placeholder="Search...">
-            <button><i class="fas fa-search"></i></button>
+            <input type="text" placeholder="Search..." id="search-input">
+            <button id="search-btn"><i class="fas fa-search"></i></button>
             <div id="search-results-message" class="search-message"></div>
         </div>
 
         <!-- Icons -->
         <div class="nav-icons">
-            <a href="cart.html" class="cart-icon"><i class="fas fa-shopping-cart"><sup><span id="cart-count">0</span></a></li></i></a>
+            <a href="cart.html" class="cart-icon"><i class="fas fa-shopping-cart"></i><sup><span id="cart-count">0</span></sup></a>
             <a href="profile.html" class="profile-icon"><i class="fas fa-user"></i></a>
             <div class="settings-icon" onclick="toggleSidebar()">
                 <i class="fas fa-ellipsis-v"></i>
@@ -55,44 +55,45 @@
         </div>
     </section>
 
-    
     <!-- Products Section -->
     <section id="shop" class="category-products">
         <div class="product-grid" id="product-grid">
             <!-- Products will be loaded here by JavaScript -->
         </div>
     </section>
- <!-- Product Detail Modal -->
- <div id="productModal" class="modal">
-    <span class="close-modal">&times;</span>
-    <div class="modal-content">
-        <div class="product-detail">
-            <div class="product-detail-images">
-                <img id="modalProductImage" src="" alt="">
-                <div id="quickViewSaleBadge" class="product-badge" style="display: none;">Sale</div>
-            </div>
-            <div class="product-detail-info">
-                <h2 id="modalProductTitle">Product Title</h2>
-                <div class="product-price-large" id="modalProductPrice">₱0.00</div>
-                <p class="product-description" id="modalProductDescription">
-                    Product description will be loaded here.
-                </p>
-                <div class="product-options">
-                    <div class="option-group">
-                        <h4>Size</h4>
-                        <div class="size-options" id="quickViewSizes">
-                            <!-- Size options will be loaded here -->
+
+    <!-- Product Detail Modal -->
+    <div id="productModal" class="modal">
+        <span class="close-modal">&times;</span>
+        <div class="modal-content">
+            <div class="product-detail">
+                <div class="product-detail-images">
+                    <img id="modalProductImage" src="" alt="">
+                    <div id="quickViewSaleBadge" class="product-badge" style="display: none;">Sale</div>
+                </div>
+                <div class="product-detail-info">
+                    <h2 id="modalProductTitle">Product Title</h2>
+                    <div class="product-price-large" id="modalProductPrice">₱0.00</div>
+                    <p class="product-description" id="modalProductDescription">
+                        Product description will be loaded here.
+                    </p>
+                    <div class="product-options">
+                        <div class="option-group">
+                            <h4>Size</h4>
+                            <div class="size-options" id="quickViewSizes">
+                                <!-- Size options will be loaded here -->
+                            </div>
                         </div>
                     </div>
-                </div>
-                <div class="detail-actions">
-                    <button class="btn" id="reserveInModal">Reserve Now</button>
-                    <button class="btn" id="addToCartBtn" style="background-color: var(--secondary-color); color: var(--dark-color);">Add to Cart</button>
+                    <div class="detail-actions">
+                        <button class="btn" id="reserveInModal">Reserve Now</button>
+                        <button class="btn" id="addToCartBtn">Add to Cart</button>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
+
     <!-- Footer Section -->
     <footer class="footer">
         <div class="footer-content">
@@ -107,7 +108,7 @@
             </div>
 
             <!-- Social Media Icons -->
-            <section id="Contact" div class="social-media">
+            <div id="Contact" class="social-media">
                 <h3>Follow Us</h3>
                 <div class="social-icons">
                     <a href="https://www.facebook.com/share/1FMLtsgqFB/?mibextid=qi2Omg" class="social-icon"><i class="fab fa-facebook-f"></i></a>
@@ -119,10 +120,11 @@
 
         <!-- Footer Bottom -->
         <div class="footer-bottom">
-            <p>&copy; 2023 E-Shop. All rights reserved.</p>
+            <p>&copy; 2023 Only@Sham. All rights reserved.</p>
         </div>
     </footer>
 
+    <script src="auth.js"></script>
     <script src="script.js"></script>
     <script src="products.js"></script>
 </body>

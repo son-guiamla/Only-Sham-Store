@@ -1,425 +1,200 @@
-document.addEventListener('DOMContentLoaded', function() {
-    // Check if user is logged in
-    const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
-    if (!loggedInUser) {
-        alert('Please login to access your profile');
-        window.location.href = 'login.html';
-        return;
-    }
+import { USERS_ENDPOINT } from './config.js';
+import { checkUserBanStatus, setupLoginLogout, getAuthToken } from './auth.js';
 
-    // Load user data
-    loadUserProfile();
-    loadReservations();
-    setupLoginLogout();
-
-    // Profile picture upload
-    const profileUpload = document.getElementById('profile-upload');
-    const profilePicture = document.getElementById('profile-picture');
-    const removePictureBtn = document.getElementById('remove-picture-btn');
-
-    if (profileUpload) {
-        profileUpload.addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(event) {
-                    profilePicture.src = event.target.result;
-                    saveProfilePicture(event.target.result);
-                    updateProfileIcon();
-                };
-                reader.readAsDataURL(file);
-            }
-        });
-    }
-
-    if (removePictureBtn) {
-        removePictureBtn.addEventListener('click', function() {
-            profilePicture.src = 'assets/default-profile.png';
-            removeProfilePicture();
-            updateProfileIcon();
-        });
-    }
-
-    // Profile menu navigation
-    const menuButtons = document.querySelectorAll('.profile-menu-btn');
-    menuButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            menuButtons.forEach(btn => btn.classList.remove('active'));
-            this.classList.add('active');
-            
-            const sectionId = this.getAttribute('data-section') + '-section';
-            document.querySelectorAll('.profile-section').forEach(section => {
-                section.classList.remove('active');
-            });
-            document.getElementById(sectionId).classList.add('active');
-        });
-    });
-
-    // Personal info form submission
-    const personalInfoForm = document.getElementById('personal-info-form');
-    if (personalInfoForm) {
-        personalInfoForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            updatePersonalInfo();
-        });
-    }
-
-    // Security form submission
-    const securityForm = document.getElementById('security-form');
-    if (securityForm) {
-        securityForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            updatePassword();
-        });
+document.addEventListener('DOMContentLoaded', async function() {
+    if (!await checkUserBanStatus()) return;
+    
+    try {
+        await loadUserProfile();
+        setupLoginLogout();
+        setupProfilePictureUpload();
+    } catch (error) {
+        console.error('Profile initialization error:', error);
+        alert(error.message);
     }
 });
 
-function loadUserProfile() {
+async function loadUserProfile() {
     const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
-    const users = JSON.parse(localStorage.getItem('users')) || [];
-    const user = users.find(u => u.username === loggedInUser.username);
-
-    if (user) {
-        // Load profile picture
-        const profilePicture = document.getElementById('profile-picture');
-        if (profilePicture) {
-            const pictureSrc = user.profilePicture || 
-                             loggedInUser.profilePicture || 
-                             'assets/default-profile.png';
-            profilePicture.src = pictureSrc;
-            
-            // Ensure consistency
-            if (pictureSrc !== 'assets/default-profile.png') {
-                saveProfilePicture(pictureSrc);
-            }
-        }
-
-        // Load personal info
-        document.getElementById('full-name').value = user.fullname || '';
-        document.getElementById('username').value = user.username || '';
-        document.getElementById('email').value = user.email || '';
-        document.getElementById('phone').value = user.phone || '';
-        document.getElementById('gender').value = user.gender || '';
+    if (!loggedInUser) {
+        window.location.href = 'login.html';
+        return;
     }
-}
-
-function saveProfilePicture(imageUrl) {
-    const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
-    const users = JSON.parse(localStorage.getItem('users')) || [];
     
-    if (loggedInUser) {
-        // Update loggedInUser
-        loggedInUser.profilePicture = imageUrl;
-        localStorage.setItem('loggedInUser', JSON.stringify(loggedInUser));
-        
-        // Update in users array
-        const userIndex = users.findIndex(u => u.username === loggedInUser.username);
-        if (userIndex !== -1) {
-            users[userIndex].profilePicture = imageUrl;
-            localStorage.setItem('users', JSON.stringify(users));
-        }
-    }
-}
-
-function removeProfilePicture() {
-    const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
-    const users = JSON.parse(localStorage.getItem('users')) || [];
-    const userIndex = users.findIndex(u => u.username === loggedInUser.username);
-
-    if (userIndex !== -1) {
-        // Remove from both locations
-        users[userIndex].profilePicture = 'assets/default-profile.png';
-        loggedInUser.profilePicture = 'assets/default-profile.png';
-        
-        localStorage.setItem('users', JSON.stringify(users));
-        localStorage.setItem('loggedInUser', JSON.stringify(loggedInUser));
-    }
-}
-
-function updateProfileIcon() {
-    const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
-    const profileIcons = document.querySelectorAll('.profile-icon');
-    
-    profileIcons.forEach(icon => {
-        if (loggedInUser?.profilePicture && loggedInUser.profilePicture !== 'assets/default-profile.png') {
-            // Replace the icon with the profile picture
-            icon.innerHTML = `<img src="${loggedInUser.profilePicture}" alt="Profile" class="profile-icon-img">`;
-            
-            // Add styles to the image
-            const img = icon.querySelector('.profile-icon-img');
-            if (img) {
-                img.style.width = '24px';
-                img.style.height = '24px';
-                img.style.borderRadius = '50%';
-                img.style.objectFit = 'cover';
+    try {
+        const response = await fetch(`${USERS_ENDPOINT}${loggedInUser.username}`, {
+            headers: {
+                'Authorization': `Bearer ${getAuthToken()}`
             }
-        } else {
-            // Revert to the default user icon
-            icon.innerHTML = '<i class="fas fa-user"></i>';
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message);
+        }
+        
+        const userData = await response.json();
+        
+        // Update form fields
+        document.getElementById('full-name').value = userData.fullname || '';
+        document.getElementById('username').value = userData.username || '';
+        document.getElementById('email').value = userData.email || '';
+        document.getElementById('phone').value = userData.phone || '';
+        document.getElementById('gender').value = userData.gender || '';
+        
+        // Update profile picture
+        const profileImg = document.getElementById('profile-picture');
+        if (profileImg) {
+            profileImg.src = userData.profilePicture || 'assets/default-profile.png';
+            profileImg.onerror = () => {
+                profileImg.src = 'assets/default-profile.png';
+            };
+        }
+    } catch (error) {
+        console.error('Error loading profile:', error);
+        throw error;
+    }
+}
+
+function setupProfilePictureUpload() {
+    const uploadInput = document.getElementById('profile-picture-upload');
+    const profileImg = document.getElementById('profile-picture');
+    
+    if (!uploadInput || !profileImg) return;
+    
+    uploadInput.addEventListener('change', async function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        if (!file.type.match('image.*')) {
+            alert('Please select an image file');
+            return;
+        }
+        
+        if (file.size > 2 * 1024 * 1024) {
+            alert('Image must be less than 2MB');
+            return;
+        }
+        
+        const formData = new FormData();
+        formData.append('profilePicture', file);
+        
+        try {
+            const response = await fetch(`${USERS_ENDPOINT}profile-picture`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${getAuthToken()}`
+                },
+                body: formData
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message);
+            }
+            
+            const { profilePicture } = await response.json();
+            profileImg.src = profilePicture;
+            
+            // Update local user data
+            const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
+            loggedInUser.profilePicture = profilePicture;
+            localStorage.setItem('loggedInUser', JSON.stringify(loggedInUser));
+            
+            alert('Profile picture updated successfully!');
+        } catch (error) {
+            console.error('Error uploading profile picture:', error);
+            alert(error.message);
         }
     });
 }
 
-function updatePersonalInfo() {
-    const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
-    const users = JSON.parse(localStorage.getItem('users')) || [];
-    const userIndex = users.findIndex(u => u.username === loggedInUser.username);
-
-    if (userIndex !== -1) {
-        const fullName = document.getElementById('full-name').value;
-        const username = document.getElementById('username').value;
-        const email = document.getElementById('email').value;
-        const phone = document.getElementById('phone').value;
-        const gender = document.getElementById('gender').value;
-
-        // Check if username is being changed to one that already exists
-        if (username !== users[userIndex].username) {
-            const usernameExists = users.some(u => u.username === username && u.username !== users[userIndex].username);
-            if (usernameExists) {
-                alert('Username already exists. Please choose a different one.');
-                return;
-            }
-        }
-
-        // Update user data
-        users[userIndex].fullname = fullName;
-        users[userIndex].username = username;
-        users[userIndex].email = email;
-        users[userIndex].phone = phone;
-        users[userIndex].gender = gender;
-
-        localStorage.setItem('users', JSON.stringify(users));
-        
-        // Update loggedInUser
-        loggedInUser.fullname = fullName;
-        loggedInUser.username = username;
-        loggedInUser.email = email;
-        loggedInUser.phone = phone;
-        loggedInUser.gender = gender;
-        localStorage.setItem('loggedInUser', JSON.stringify(loggedInUser));
-
-        alert('Personal information updated successfully!');
+window.updatePersonalInfo = async function() {
+    const formData = {
+        fullname: document.getElementById('full-name').value.trim(),
+        username: document.getElementById('username').value.trim(),
+        email: document.getElementById('email').value.trim(),
+        phone: document.getElementById('phone').value.trim(),
+        gender: document.getElementById('gender').value
+    };
+    
+    if (!formData.fullname || !formData.email) {
+        alert('Full name and email are required');
+        return;
     }
-}
-
-function updatePassword() {
-    const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
-    const users = JSON.parse(localStorage.getItem('users')) || [];
-    const userIndex = users.findIndex(u => u.username === loggedInUser.username);
-
-    if (userIndex !== -1) {
-        const currentPassword = document.getElementById('current-password').value;
-        const newPassword = document.getElementById('new-password').value;
-        const confirmPassword = document.getElementById('confirm-password').value;
-
-        // Validate current password
-        if (currentPassword !== users[userIndex].password) {
-            alert('Current password is incorrect');
-            return;
-        }
-
-        // Validate new password
-        if (newPassword !== confirmPassword) {
-            alert('New passwords do not match');
-            return;
-        }
-
-        if (newPassword.length < 6) {
-            alert('Password must be at least 6 characters long');
-            return;
-        }
-
-        // Update password
-        users[userIndex].password = newPassword;
-        localStorage.setItem('users', JSON.stringify(users));
+    
+    try {
+        const response = await fetch(`${USERS_ENDPOINT}update`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${getAuthToken()}`
+            },
+            body: JSON.stringify(formData)
+        });
         
-        // Update loggedInUser
-        loggedInUser.password = newPassword;
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message);
+        }
+        
+        const updatedUser = await response.json();
+        
+        // Update local storage
+        const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
+        Object.assign(loggedInUser, updatedUser);
         localStorage.setItem('loggedInUser', JSON.stringify(loggedInUser));
+        
+        alert('Profile updated successfully!');
+    } catch (error) {
+        console.error('Error updating profile:', error);
+        alert(error.message);
+    }
+};
 
-        // Clear form
+window.updatePassword = async function() {
+    const currentPassword = document.getElementById('current-password').value;
+    const newPassword = document.getElementById('new-password').value;
+    const confirmPassword = document.getElementById('confirm-password').value;
+    
+    if (!currentPassword || !newPassword || !confirmPassword) {
+        alert('All password fields are required');
+        return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+        alert('New passwords do not match');
+        return;
+    }
+    
+    if (newPassword.length < 8) {
+        alert('Password must be at least 8 characters');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${USERS_ENDPOINT}password`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${getAuthToken()}`
+            },
+            body: JSON.stringify({ currentPassword, newPassword })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message);
+        }
+        
+        // Clear password fields
         document.getElementById('current-password').value = '';
         document.getElementById('new-password').value = '';
         document.getElementById('confirm-password').value = '';
-
+        
         alert('Password updated successfully!');
-    }
-}
-
-function loadReservations() {
-    const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
-    const users = JSON.parse(localStorage.getItem('users')) || [];
-    const user = users.find(u => u.username === loggedInUser.username);
-    const reservationsContainer = document.getElementById('reservations-list');
-    
-    if (!reservationsContainer) return;
-    
-    if (!user || (!user.cart && !user.pickedItems)) {
-        reservationsContainer.innerHTML = '<p class="empty-message">You have no active reservations.</p>';
-        return;
-    }
-
-    let html = '';
-    let totalSpent = 0;
-
-    // Active reservations
-    if (user.cart && user.cart.length > 0) {
-        html += '<div class="reservation-section"><h3>Active Reservations</h3>';
-        
-        user.cart.forEach((item, index) => {
-            if (item.status === 'pending') return;
-            
-            let status, statusClass;
-            if (item.status === 'confirmed') {
-                status = 'confirmed';
-                statusClass = 'status-confirmed';
-            } else {
-                status = 'reserved';
-                statusClass = 'status-reserved';
-                
-                if (item.reservedAt) {
-                    const expiryDate = new Date(item.reservedAt);
-                    expiryDate.setDate(expiryDate.getDate() + 3);
-                    
-                    if (new Date() > expiryDate) {
-                        status = 'expired';
-                        statusClass = 'status-expired';
-                    }
-                }
-            }
-            
-            html += `
-            <div class="reservation-item">
-                <img src="${item.image || 'assets/default-product.jpg'}" alt="${item.name}">
-                <div class="reservation-details">
-                    <h4>${item.name}</h4>
-                    <p>Size: ${item.size} | Qty: ${item.quantity}</p>
-                    <p>Price: ₱${item.price.toFixed(2)} each</p>
-                    <p>Total: ₱${(item.price * item.quantity).toFixed(2)}</p>
-                    <span class="status ${statusClass}">${status}</span>
-                    ${item.reservedAt ? `<p>Reserved: ${new Date(item.reservedAt).toLocaleDateString()}</p>` : ''}
-                </div>
-                ${status === 'reserved' ? `
-                <div class="reservation-actions">
-                    <button class="btn-cancel" data-index="${index}">Cancel</button>
-                </div>` : ''}
-            </div>
-            `;
-            
-            if (status === 'confirmed') {
-                totalSpent += item.price * item.quantity;
-            }
-        });
-        
-        html += '</div>';
-    }
-
-    // Picked items history
-    if (user.pickedItems && user.pickedItems.length > 0) {
-        html += '<div class="reservation-section"><h3>Order History</h3>';
-        
-        user.pickedItems.forEach((item, index) => {
-            html += `
-            <div class="reservation-item picked">
-                <img src="${item.image || 'assets/default-product.jpg'}" alt="${item.name}">
-                <div class="reservation-details">
-                    <h4>${item.name}</h4>
-                    <p>Size: ${item.size} | Qty: ${item.quantity}</p>
-                    <p>Price: ₱${item.price.toFixed(2)} each</p>
-                    <p>Total: ₱${(item.price * item.quantity).toFixed(2)}</p>
-                    <span class="status status-completed">Picked Up</span>
-                    <p>Picked on: ${new Date(item.pickedAt).toLocaleDateString()}</p>
-                </div>
-                <div class="reservation-actions">
-                    <button class="btn-delete" data-index="${index}" data-type="picked">
-                        <i class="fas fa-trash"></i> Delete
-                    </button>
-                </div>
-            </div>
-            `;
-            
-            totalSpent += item.price * item.quantity;
-        });
-        
-        html += '</div>';
-    }
-
-    if (totalSpent > 0) {
-        html += `<div class="total-spending">Total Cost: ₱${totalSpent.toFixed(2)}</div>`;
-    }
-
-    reservationsContainer.innerHTML = html || '<p class="empty-message">You have no active reservations.</p>';
-    
-    // Add event listeners to cancel buttons
-    document.querySelectorAll('.btn-cancel').forEach(btn => {
-        btn.addEventListener('click', function() {
-            cancelReservation(parseInt(this.dataset.index), false);
-        });
-    });
-    
-    // Add event listeners to delete buttons
-    document.querySelectorAll('.btn-delete').forEach(btn => {
-        btn.addEventListener('click', function() {
-            cancelReservation(parseInt(this.dataset.index), true);
-        });
-    });
-}
-
-function cancelReservation(index, isPickedItem = false) {
-    if (!confirm('Are you sure you want to ' + (isPickedItem ? 'delete' : 'cancel') + ' this item?')) return;
-
-    const users = JSON.parse(localStorage.getItem('users')) || [];
-    const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
-    const userIndex = users.findIndex(u => u.username === loggedInUser.username);
-
-    if (userIndex === -1) return;
-
-    if (isPickedItem) {
-        users[userIndex].pickedItems.splice(index, 1);
-    } else {
-        const item = users[userIndex].cart[index];
-        
-        if (item.status === 'reserved' || item.status === 'confirmed') {
-            const products = JSON.parse(localStorage.getItem('products')) || [];
-            const productIndex = products.findIndex(p => p.id === item.productId);
-            if (productIndex !== -1 && products[productIndex].sizes) {
-                products[productIndex].sizes[item.size] += item.quantity;
-                localStorage.setItem('products', JSON.stringify(products));
-            }
-        }
-        
-        users[userIndex].cart.splice(index, 1);
-    }
-
-    localStorage.setItem('users', JSON.stringify(users));
-    const updatedUser = users[userIndex];
-    localStorage.setItem('loggedInUser', JSON.stringify(updatedUser));
-
-    loadReservations();
-    window.dispatchEvent(new Event('storage'));
-}
-
-function setupLoginLogout() {
-    try {
-        const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
-        const loginLink = document.getElementById('login-logout-link');
-        
-        if (!loginLink) return;
-        
-        if (loggedInUser) {
-            loginLink.textContent = 'Logout';
-            loginLink.href = 'login.html';
-            loginLink.onclick = function(e) {
-                e.preventDefault();
-                localStorage.removeItem('loggedInUser');
-                window.location.href = 'index.html';
-            };
-        } else {
-            loginLink.textContent = 'Login';
-            loginLink.href = 'login.html';
-            loginLink.onclick = null;
-        }
     } catch (error) {
-        console.error('Error setting up login/logout:', error);
+        console.error('Error updating password:', error);
+        alert(error.message);
     }
-}
+};
