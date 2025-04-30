@@ -1,0 +1,176 @@
+<?php
+session_start();
+$isLoggedIn = isset($_SESSION['username']);
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shoes | Only@Sham</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <nav class="navbar">
+        <!-- Logo -->
+        <div class="logo">
+            <a href="index.php">Only@Sham</a>
+        </div>
+
+        <!-- Menu Links -->
+        <ul class="nav-links">
+            <li><a href="index.php">Home</a></li>
+            <li><a href="cart.php">Reservations</a></li>
+            <li><a href="#about-us">About Us</a></li>
+            <li><a href="#Contact">Contact</a></li>
+        </ul>
+
+        <!-- Search Bar -->
+        <div class="search-bar">
+            <input type="text" placeholder="Search...">
+            <button><i class="fas fa-search"></i></button>
+            <div id="search-results-message" class="search-message"></div>
+        </div>
+
+        <!-- Icons -->
+        <div class="nav-icons">
+            <a href="cart.php" class="cart-icon"><i class="fas fa-shopping-cart"><sup><span id="cart-count">0</span></a></li></i></a>
+            <a href="profile.html" class="profile-icon"><i class="fas fa-user"></i></a>
+            <div class="settings-icon" onclick="toggleSidebar()">
+                <i class="fas fa-ellipsis-v"></i>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="sidebar" id="sidebar">
+            <a href="#" class="close-btn" onclick="toggleSidebar()">&times;</a>
+            <?php if ($isLoggedIn): ?>
+                <a href="logout.php" id="login-logout-link">Logout</a>
+            <?php else: ?>
+                <a href="login.php" id="login-logout-link">Login</a>
+            <?php endif; ?>
+            <a href="#" class="sidebar-link settings-link">Settings</a>
+            <a href="#" class="sidebar-link help-link">Help</a>
+        </div>
+    </nav>
+    
+    <!-- Category Header -->
+    <section class="category-header">
+        <div class="category-banner" style="background-image: url('assets/bgshoes.jpeg.jpeg')">
+            <h1>Shoes</h1>
+            <p>Discover our premium selection of stylish shoes</p>
+        </div>
+    </section>
+
+    <!-- Products Section -->
+    <section id="shop" class="category-products">
+        <div class="product-grid" id="product-grid">
+            <!-- Products will be loaded here by JavaScript -->
+        </div>
+    </section>
+
+    <!-- Product Detail Modal -->
+    <div id="productModal" class="modal">
+        <span class="close-modal">&times;</span>
+        <div class="modal-content">
+            <div class="product-detail">
+                <div class="product-detail-images">
+                    <img id="modalProductImage" src="" alt="">
+                    <div id="quickViewSaleBadge" class="product-badge" style="display: none;">Sale</div>
+                </div>
+                <div class="product-detail-info">
+                    <h2 id="modalProductTitle">Product Title</h2>
+                    <div class="product-price-large" id="modalProductPrice">₱0.00</div>
+                    <p class="product-description" id="modalProductDescription">
+                        Product description will be loaded here.
+                    </p>
+                    <div class="product-options">
+                        <div class="option-group">
+                            <h4>Size</h4>
+                            <div class="size-options" id="quickViewSizes">
+                                <!-- Size options will be loaded here -->
+                            </div>
+                        </div>
+                    </div>
+                    <div class="detail-actions">
+                        <button class="btn" id="reserveInModal">Reserve Now</button>
+                        <button class="btn" id="addToCartBtn" style="background-color: var(--secondary-color); color: var(--dark-color);">Add to Cart</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer Section -->
+    <footer class="footer">
+        <div class="footer-content">
+            <!-- Footer Links -->
+            <div class="footer-links">
+                <h3>Quick Links</h3>
+                <ul>
+                    <li><a href="#">Privacy Policy</a></li>
+                    <li><a href="#">Terms & Conditions</a></li>
+                    <li><a href="#">Return Policy</a></li>
+                </ul>
+            </div>
+
+            <!-- Social Media Icons -->
+            <section id="Contact" class="social-media">
+                <h3>Follow Us</h3>
+                <div class="social-icons">
+                    <a href="https://www.facebook.com/share/1FMLtsgqFB/?mibextid=qi2Omg" class="social-icon"><i class="fab fa-facebook-f"></i></a>
+                    <a href="#" class="social-icon"><i class="fab fa-instagram"></i></a>
+                    <a href="#" class="social-icon"><i class="fab fa-tiktok"></i></a>
+                </div>
+            </section>
+        </div>
+
+        <!-- Footer Bottom -->
+        <div class="footer-bottom">
+            <p>&copy; 2023 E-Shop. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load shoes products
+            fetch('products.php?action=getByCategory&category_id=3') // Assuming 3 is the category ID for shoes
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.products.length > 0) {
+                        const productGrid = document.getElementById('product-grid');
+                        data.products.forEach(product => {
+                            const productCard = document.createElement('div');
+                            productCard.className = 'product-card';
+                            productCard.innerHTML = `
+                                <div class="product-image-container">
+                                    <img src="${product.image || 'assets/default-product.jpg'}" alt="${product.name}" class="product-image">
+                                    ${product.discount ? '<div class="product-badge">Sale</div>' : ''}
+                                    <button class="quick-view-btn" onclick="openQuickView(${product.product_id})">Quick View</button>
+                                </div>
+                                <div class="product-info">
+                                    <h3 class="product-title">${product.name}</h3>
+                                    <div class="product-price">
+                                        ${product.original_price ? 
+                                            `<span class="original-price">₱${product.original_price.toFixed(2)}</span>
+                                             <span class="discounted-price">₱${product.price.toFixed(2)}</span>` : 
+                                            `₱${product.price.toFixed(2)}`}
+                                    </div>
+                                    <button class="add-to-cart" data-id="${product.product_id}">Add to Cart</button>
+                                </div>
+                            `;
+                            productGrid.appendChild(productCard);
+                        });
+                        // Reinitialize add to cart buttons
+                        if (typeof setupAddToCartButtons === 'function') {
+                            setupAddToCartButtons();
+                        }
+                    }
+                })
+                .catch(error => console.error('Error loading products:', error));
+        });
+    </script>
+</body>
+</html>

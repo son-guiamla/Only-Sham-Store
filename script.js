@@ -29,103 +29,56 @@ function initSmoothScrolling() {
     });
 }
 
-/**
- * Validates an email address
- * @param {string} email - The email to validate
- * @returns {boolean} True if email is valid
- */
-function validateEmail(email) {
-    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return re.test(email);
-}
-
-/**
- * Displays an error message
- * @param {string} elementId - The ID of the error element
- * @param {string} message - The error message to display
- */
-function showError(elementId, message) {
-    const errorElement = document.getElementById(elementId);
-    if (errorElement) {
-        errorElement.textContent = message;
-        errorElement.style.display = 'block';
-    }
-}
-
-/**
- * Hides an error message
- * @param {string} elementId - The ID of the error element
- */
-function hideError(elementId) {
-    const errorElement = document.getElementById(elementId);
-    if (errorElement) {
-        errorElement.style.display = 'none';
-    }
-}
-
-/**
- * Checks if a user is banned and redirects if necessary
- * @returns {boolean} True if user is not banned
- */
-function checkUserBanStatus() {
-    const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
-    if (loggedInUser) {
-        const users = JSON.parse(localStorage.getItem('users')) || [];
-        const currentUser = users.find(u => u.username === loggedInUser.username);
-        
-        if (currentUser?.banned) {
-            localStorage.removeItem('loggedInUser');
-            window.location.href = 'login.html?banned=true';
-            return false;
-        }
-    }
-    return true;
-}
-
 /* ======================
    AUTHENTICATION FUNCTIONS
    ====================== */
 
 /**
- * Registers a new user
- * @param {string} fullname - User's full name
- * @param {string} username - User's username
- * @param {string} email - User's email
- * @param {string} phone - User's phone number
- * @param {string} password - User's password
- * @param {string} [gender=''] - User's gender (optional)
- * @param {string} [address=''] - User's address (optional)
- * @returns {boolean} True if registration was successful
+ * Checks authentication status with server
  */
-function registerUser(fullname, username, email, phone, password, gender = '', address = '') {
-    const users = JSON.parse(localStorage.getItem('users')) || [];
-    
-    if (users.some(user => user.username === username)) {
-        alert('Username already exists');
-        return false;
+async function checkAuthStatus() {
+    try {
+        const response = await fetch('auth.php?action=check');
+        if (!response.ok) throw new Error('Network response was not ok');
+        return await response.json();
+    } catch (error) {
+        console.error('Error checking auth status:', error);
+        return { logged_in: false };
     }
-    
-    if (users.some(user => user.email === email)) {
-        alert('Email already registered');
-        return false;
+}
+
+/**
+ * Sets up the login/logout link in the navigation
+ */
+async function setupLoginLogout() {
+    try {
+        const loginLink = document.getElementById('login-logout-link');
+        if (!loginLink) return;
+
+        const authStatus = await checkAuthStatus();
+        
+        if (authStatus.logged_in) {
+            loginLink.textContent = 'Logout';
+            loginLink.href = 'auth.php?action=logout';
+            loginLink.onclick = async function(e) {
+                e.preventDefault();
+                try {
+                    const response = await fetch('auth.php?action=logout');
+                    if (response.ok) {
+                        window.location.href = 'index.php';
+                    }
+                } catch (error) {
+                    console.error('Logout error:', error);
+                }
+            };
+        } else {
+            loginLink.textContent = 'Login';
+            loginLink.href = 'login.php';
+            loginLink.onclick = null;
+        }
+    } catch (error) {
+        console.error('Error setting up login/logout:', error);
     }
-    
-    const newUser = {
-        fullname,
-        username,
-        email,
-        phone,
-        password,
-        gender,
-        address,
-        profilePicture: '',
-        reservations: [],
-        cart: []
-    };
-    
-    users.push(newUser);
-    localStorage.setItem('users', JSON.stringify(users));
-    return true;
 }
 
 /* ======================
@@ -133,120 +86,51 @@ function registerUser(fullname, username, email, phone, password, gender = '', a
    ====================== */
 
 /**
- * Updates the cart count in the navbar
+ * Adds an item to the cart
  */
-function updateCartCount() {
+async function addToCart(productId, size, status = 'pending') {
     try {
-        const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
-        const cartCountElements = document.querySelectorAll('#cart-count');
-
-        if (!loggedInUser || !loggedInUser.cart) {
-            cartCountElements.forEach(element => {
-                if (element) element.textContent = '0';
-            });
-            return;
-        }
-
-        const activeReservations = loggedInUser.cart.filter(
-            item => !item.status || item.status === 'pending'
-        ).reduce((sum, item) => sum + item.quantity, 0);
-
-        cartCountElements.forEach(element => {
-            if (element) element.textContent = activeReservations;
-        });
-    } catch (error) {
-        console.error('Error updating cart count:', error);
-    }
-}
-
-/**
- * Adds a product to the cart
- * @param {string} productId - The ID of the product to add
- * @param {string} size - The selected size of the product
- */
-function addToCart(productId, size) {
-    try {
-        const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
-        if (!loggedInUser) {
+        const authStatus = await checkAuthStatus();
+        if (!authStatus.logged_in) {
             const confirmLogin = confirm('You need to login to add items to cart. Would you like to login now?');
             if (confirmLogin) {
-                window.location.href = 'login.html';
+                window.location.href = 'login.php';
             }
             return;
         }
-
-        const products = JSON.parse(localStorage.getItem('products')) || [];
-        const product = products.find(p => p.id === productId);
         
-        if (!product) {
-            alert('Product not found');
-            return;
-        }
-        
-        // Check if size is available
-        if (!product.sizes || !product.sizes[size] || product.sizes[size] <= 0) {
-            alert('Selected size is out of stock');
-            return;
-        }
-        
-        // Get or initialize user's cart
-        const users = JSON.parse(localStorage.getItem('users')) || [];
-        const userIndex = users.findIndex(u => u.username === loggedInUser.username);
-        
-        if (userIndex === -1) return;
-        
-        if (!users[userIndex].cart) {
-            users[userIndex].cart = [];
-        }
-        
-        // Check if product already in cart
-        const existingItemIndex = users[userIndex].cart.findIndex(
-            item => item.productId === productId && item.size === size && (!item.status || item.status === 'pending')
-        );
-        
-        if (existingItemIndex !== -1) {
-            // Check if we have enough stock
-            if (product.sizes[size] <= users[userIndex].cart[existingItemIndex].quantity) {
-                alert(`Only ${product.sizes[size]} items left in stock for this size!`);
-                return;
-            }
-            
-            users[userIndex].cart[existingItemIndex].quantity += 1;
-        } else {
-            // Add new item to cart
-            users[userIndex].cart.push({
-                productId,
-                name: product.name,
-                price: product.price,
-                image: product.image || 'assets/default-product.jpg',
-                size,
+        const response = await fetch('cart.php?action=add', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                product_id: productId,
+                size: size,
                 quantity: 1,
-                status: 'pending',
-                reservedAt: new Date().toISOString()
-            });
+                status: status,
+                csrf_token: getCsrfToken()
+            })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to add to cart');
         }
         
-        // Update product stock
-        const productIndex = products.findIndex(p => p.id === productId);
-        if (productIndex !== -1 && products[productIndex].sizes) {
-            products[productIndex].sizes[size] -= 1;
-            localStorage.setItem('products', JSON.stringify(products));
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to add to cart');
         }
         
-        localStorage.setItem('users', JSON.stringify(users));
+        await updateCartCount();
         
-        // Update loggedInUser data
-        const updatedUser = users[userIndex];
-        localStorage.setItem('loggedInUser', JSON.stringify(updatedUser));
-        
-        updateCartCount();
-        
-        // Show success feedback
         const button = document.querySelector(`.add-to-cart[data-id="${productId}"]`);
         if (button) {
             const originalText = button.textContent;
-            button.textContent = 'Added!';
-            button.style.backgroundColor = '#4CAF50';
+            button.textContent = status === 'reserved' ? 'Reserved!' : 'Added!';
+            button.style.backgroundColor = status === 'reserved' ? '#2196F3' : '#4CAF50';
             setTimeout(() => {
                 button.textContent = originalText;
                 button.style.backgroundColor = '';
@@ -254,123 +138,84 @@ function addToCart(productId, size) {
         }
     } catch (error) {
         console.error('Error adding to cart:', error);
-        alert('An error occurred while adding to cart');
+        alert(error.message || 'An error occurred while adding to cart');
     }
 }
 
-/* ======================
-   LOGIN/LOGOUT FUNCTIONS
-   ====================== */
+/**
+ * Updates the cart count display
+ */
+async function updateCartCount() {
+    try {
+        const authStatus = await checkAuthStatus();
+        const cartCountElements = document.querySelectorAll('#cart-count');
+
+        if (!authStatus.logged_in) {
+            cartCountElements.forEach(element => {
+                if (element) element.textContent = '0';
+            });
+            return;
+        }
+        
+        const response = await fetch('cart.php?action=count');
+        if (!response.ok) throw new Error('Failed to get cart count');
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to get cart count');
+        }
+        
+        const activeItems = data.count || 0;
+        
+        cartCountElements.forEach(element => {
+            if (element) element.textContent = activeItems;
+        });
+    } catch (error) {
+        console.error('Error updating cart count:', error);
+    }
+}
 
 /**
- * Sets up the login/logout functionality and cart buttons
+ * Sets up event listeners for all add-to-cart buttons on the page
  */
-function setupLoginLogout() {
-    try {
-        const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
-        const loginLogoutLink = document.getElementById('login-logout-link');
-        const profileIcon = document.querySelector('.profile-icon');
-        const addToCartButtons = document.querySelectorAll('.add-to-cart');
-
-        if (loggedInUser) {
-            // User is logged in
-            if (loginLogoutLink) {
-                loginLogoutLink.textContent = 'Logout';
-                loginLogoutLink.href = '#';
-                loginLogoutLink.onclick = function(e) {
-                    e.preventDefault();
-                    localStorage.removeItem('loggedInUser');
-                    window.location.href = 'index.html';
-                };
-            }
-
-            if (addToCartButtons) {
-                addToCartButtons.forEach(button => {
-                    button.disabled = false;
-                    button.addEventListener('click', function() {
-                        const productCard = this.closest('.product-card');
-                        const productId = this.getAttribute('data-id');
-                        const sizeSelect = productCard.querySelector('.size-dropdown');
-                        const size = sizeSelect ? sizeSelect.value : 'S';
-                        addToCart(productId, size);
-                    });
-                });
-            }
-        } else {
-            // User is not logged in
-            if (loginLogoutLink) {
-                loginLogoutLink.textContent = 'Login';
-                loginLogoutLink.href = 'login.html';
-            }
-
-            if (profileIcon) {
-                profileIcon.href = 'login.html';
-            }
-
-            if (addToCartButtons) {
-                addToCartButtons.forEach(button => {
-                    button.disabled = false;
-                    button.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        const confirmLogin = confirm('You need to login or create an account to reserve products. Would you like to login now?');
-                        if (confirmLogin) {
-                            window.location.href = 'login.html';
-                        }
-                    });
-                });
-            }
-        }
-
-        updateCartCount();
-    } catch (error) {
-        console.error('Error setting up login/logout:', error);
-    }
+function setupAddToCartButtons() {
+    document.querySelectorAll('.add-to-cart').forEach(button => {
+        button.addEventListener('click', function() {
+            const productId = this.getAttribute('data-id');
+            const productCard = this.closest('.product-card');
+            const sizeSelect = productCard?.querySelector('.size-dropdown');
+            const size = sizeSelect ? sizeSelect.value : 'S';
+            addToCart(productId, size);
+        });
+    });
 }
 
 /* ======================
    QUICK VIEW FUNCTIONS
    ====================== */
 
+let selectedQuickViewSize = '';
+
 /**
  * Opens the quick view modal for a product
- * @param {string} productId - The ID of the product to display
  */
-function openQuickView(productId) {
+async function openQuickView(productId) {
     try {
-        const products = JSON.parse(localStorage.getItem('products')) || [];
-        const product = products.find(p => p.id === productId);
+        const response = await fetch(`products.php?action=get&id=${productId}`);
         
-        if (!product) {
-            alert('Product not found');
-            return;
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Product not found');
         }
         
-        // Check if product is in any active flash sale
-        const flashSales = JSON.parse(localStorage.getItem('flashSales')) || [];
-        const now = new Date();
-        let isOnSale = false;
-        let salePrice = product.price;
+        const data = await response.json();
         
-        for (const sale of flashSales) {
-            const start = new Date(sale.startTime);
-            const end = new Date(sale.endTime);
-            
-            if (now >= start && now <= end) {
-                // Check if product is included in this sale
-                if (sale.scope === 'all' || 
-                    (sale.scope === 'products' && sale.products.includes(productId)) ||
-                    (sale.scope === 'categories' && sale.categories.includes(product.category))) {
-                    
-                    isOnSale = true;
-                    if (sale.discountType === 'percentage') {
-                        salePrice = product.price * (1 - sale.discountValue / 100);
-                    } else {
-                        salePrice = Math.max(0, product.price - sale.discountValue);
-                    }
-                    break;
-                }
-            }
+        if (!data.success || !data.product) {
+            throw new Error(data.error || 'Product not found');
         }
+        
+        const product = data.product;
         
         // Update modal content
         document.getElementById('modalProductTitle').textContent = product.name;
@@ -382,12 +227,13 @@ function openQuickView(productId) {
         
         // Display price with sale info if applicable
         const priceElement = document.getElementById('modalProductPrice');
-        if (isOnSale) {
+        if (product.original_price) {
             priceElement.innerHTML = `
-                <span class="original-price">₱${product.price.toFixed(2)}</span>
-                <span class="discounted-price">₱${salePrice.toFixed(2)}</span>
+                <span class="original-price">₱${product.original_price.toFixed(2)}</span>
+                <span class="discounted-price">₱${product.price.toFixed(2)}</span>
             `;
             document.getElementById('quickViewSaleBadge').style.display = 'block';
+            document.getElementById('quickViewSaleBadge').textContent = product.discount_text || 'Sale';
         } else {
             priceElement.textContent = `₱${product.price.toFixed(2)}`;
             document.getElementById('quickViewSaleBadge').style.display = 'none';
@@ -397,34 +243,32 @@ function openQuickView(productId) {
         const sizesContainer = document.getElementById('quickViewSizes');
         sizesContainer.innerHTML = '';
         
-        if (product.sizes) {
-            const availableSizes = Object.entries(product.sizes)
-                .filter(([_, quantity]) => quantity > 0)
-                .map(([size]) => size);
-            
-            if (availableSizes.length > 0) {
-                availableSizes.forEach(size => {
+        if (product.sizes && product.sizes.length > 0) {
+            product.sizes.forEach(size => {
+                if (size.stock > 0) {
                     const sizeOption = document.createElement('div');
                     sizeOption.className = 'size-option';
-                    sizeOption.textContent = size;
-                    sizeOption.setAttribute('data-size', size);
+                    sizeOption.textContent = size.name;
+                    sizeOption.setAttribute('data-size', size.name);
                     sizeOption.addEventListener('click', function() {
                         document.querySelectorAll('#quickViewSizes .size-option').forEach(opt => {
                             opt.classList.remove('selected');
                         });
                         this.classList.add('selected');
-                        selectedQuickViewSize = size;
+                        selectedQuickViewSize = size.name;
                     });
                     
-                    // Select first size by default
-                    if (availableSizes.indexOf(size) === 0) {
+                    // Select first available size by default
+                    if (selectedQuickViewSize === '' && size.stock > 0) {
                         sizeOption.classList.add('selected');
-                        selectedQuickViewSize = size;
+                        selectedQuickViewSize = size.name;
                     }
                     
                     sizesContainer.appendChild(sizeOption);
-                });
-            } else {
+                }
+            });
+            
+            if (sizesContainer.children.length === 0) {
                 sizesContainer.innerHTML = '<p class="empty-message">No sizes available</p>';
             }
         } else {
@@ -452,13 +296,15 @@ function closeQuickView() {
     document.body.style.overflow = 'auto';
 }
 
-// Track selected size in quick view
-let selectedQuickViewSize = '';
-
-// Initialize quick view functionality
+/**
+ * Initializes quick view functionality
+ */
 function initQuickView() {
     // Close modal
-    document.querySelector('.close-modal').addEventListener('click', closeQuickView);
+    const closeModalBtn = document.querySelector('.close-modal');
+    if (closeModalBtn) {
+        closeModalBtn.addEventListener('click', closeQuickView);
+    }
     
     // Close modal when clicking outside
     window.addEventListener('click', (e) => {
@@ -468,164 +314,140 @@ function initQuickView() {
     });
     
     // Add to Cart button in modal
-    document.getElementById('addToCartBtn').addEventListener('click', function() {
-        const productId = this.getAttribute('data-id');
-        addToCart(productId, selectedQuickViewSize);
-        closeQuickView();
-    });
-
-    // Reserve button in modal
-    document.getElementById('reserveInModal').addEventListener('click', function() {
-        const productId = this.getAttribute('data-id');
-        addToCart(productId, selectedQuickViewSize);
-        closeQuickView();
-        window.location.href = 'cart.html';
-    });
-}
-
-/* ======================
-   FLASH SALE FUNCTIONS
-   ====================== */
-
-function loadFlashSale() {
-    const flashSales = JSON.parse(localStorage.getItem('flashSales')) || [];
-    const now = new Date();
-    
-    // Find active flash sales (current time is between start and end time)
-    const activeFlashSales = flashSales.filter(sale => {
-        const start = new Date(sale.startTime);
-        const end = new Date(sale.endTime);
-        return now >= start && now <= end;
-    });
-    
-    const container = document.getElementById('flash-sale-container');
-    if (!container) return;
-    
-    container.innerHTML = '';
-    
-    if (activeFlashSales.length === 0) {
-        // No active flash sales
-        container.style.display = 'none';
-        return;
+    const addToCartBtn = document.getElementById('addToCartBtn');
+    if (addToCartBtn) {
+        addToCartBtn.addEventListener('click', function() {
+            const productId = this.getAttribute('data-id');
+            addToCart(productId, selectedQuickViewSize);
+            closeQuickView();
+        });
     }
     
-    // Display the first active flash sale (you could modify to show multiple)
-    const sale = activeFlashSales[0];
-    const start = new Date(sale.startTime);
-    const end = new Date(sale.endTime);
-    
-    // Calculate time left
-    const diff = end - now;
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    
-    container.innerHTML = `
-        <div class="flash-sale-banner">
-            <div class="flash-sale-content">
-                <h2>${sale.name}</h2>
-                <p class="flash-sale-discount">
-                    ${sale.discountType === 'percentage' ? 
-                      `${sale.discountValue}% OFF` : 
-                      `₱${sale.discountValue} OFF`}
-                </p>
-                <p class="flash-sale-time">Ends in: ${days}d ${hours}h ${minutes}m</p>
-                <a href="#product-grid" class="flash-sale-button">Shop Now</a>
-            </div>
-        </div>
-    `;
-    
-    container.style.display = 'block';
+    // Reserve button in modal
+    const reserveInModal = document.getElementById('reserveInModal');
+    if (reserveInModal) {
+        reserveInModal.addEventListener('click', function() {
+            const productId = this.getAttribute('data-id');
+            addToCart(productId, selectedQuickViewSize, 'reserved');
+            closeQuickView();
+            window.location.href = 'cart.php';
+        });
+    }
 }
 
 /* ======================
    REVIEW FUNCTIONS
    ====================== */
 
-// Global scope for stars and rating
 let selectedRating = 0;
 let stars = [];
 
 /**
- * Loads and displays all shop reviews
+ * Loads and displays reviews
  */
-function loadReviews() {
-    const reviews = JSON.parse(localStorage.getItem('shopReviews')) || [];
-    const container = document.getElementById('reviews-container');
-    container.innerHTML = '';
+async function loadReviews() {
+    try {
+        const response = await fetch('reviews.php?action=get');
+        if (!response.ok) throw new Error('Failed to load reviews');
+        
+        const data = await response.json();
+        const container = document.getElementById('reviews-container');
+        container.innerHTML = '';
 
-    if (reviews.length === 0) {
-        container.innerHTML = '<p class="empty-message">No reviews yet. Be the first to review!</p>';
-        return;
-    }
+        if (!data.success || data.reviews.length === 0) {
+            container.innerHTML = '<p class="empty-message">No reviews yet. Be the first to review!</p>';
+            return;
+        }
 
-    reviews.forEach(review => {
-        const reviewElement = document.createElement('div');
-        reviewElement.className = 'review-item';
-        reviewElement.innerHTML = `
-            <div class="review-header">
-                <img src="${review.profilePicture || 'assets/default-profile.png'}" alt="${review.username}" class="reviewer-avatar">
-                <div>
-                    <div class="reviewer-name">${review.username}</div>
-                    <div class="review-date">${new Date(review.date).toLocaleDateString()}</div>
+        data.reviews.forEach(review => {
+            const reviewElement = document.createElement('div');
+            reviewElement.className = 'review-item';
+            
+            reviewElement.innerHTML = `
+                <div class="review-header">
+                    <img src="${review.profile_pic || 'assets/default-profile.png'}" alt="${review.username}" class="reviewer-avatar">
+                    <div>
+                        <div class="reviewer-name">${review.username}</div>
+                        <div class="review-date">${new Date(review.created_at).toLocaleDateString()}</div>
+                    </div>
                 </div>
-            </div>
-            <div class="review-rating">
-                ${'★'.repeat(review.rating)}${'☆'.repeat(5 - review.rating)}
-            </div>
-            <div class="review-text">${review.comment}</div>
-        `;
-        container.appendChild(reviewElement);
-    });
+                <div class="review-rating">
+                    ${'★'.repeat(review.rating)}${'☆'.repeat(5 - review.rating)}
+                </div>
+                <div class="review-text">${review.comment}</div>
+            `;
+            container.appendChild(reviewElement);
+        });
+    } catch (error) {
+        console.error('Error loading reviews:', error);
+        const container = document.getElementById('reviews-container');
+        container.innerHTML = '<p class="error-message">Failed to load reviews. Please try again later.</p>';
+    }
 }
 
 /**
  * Submits a new review
  */
-function submitReview() {
-    const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
-    if (!loggedInUser) {
-        alert('Please login to submit a review');
-        return;
+async function submitReview() {
+    try {
+        const authStatus = await checkAuthStatus();
+        if (!authStatus.logged_in) {
+            alert('Please login to submit a review');
+            return;
+        }
+
+        const comment = document.getElementById('review-comment').value.trim();
+        const rating = selectedRating;
+
+        if (rating === 0) {
+            alert('Please select a rating');
+            return;
+        }
+
+        if (comment === '') {
+            alert('Please enter your review comment');
+            return;
+        }
+
+        const response = await fetch('reviews.php?action=add', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                rating: rating,
+                comment: comment,
+                csrf_token: getCsrfToken()
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to submit review');
+        }
+
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to submit review');
+        }
+
+        // Reset form
+        document.getElementById('review-comment').value = '';
+        stars.forEach(star => {
+            star.classList.remove('fas');
+            star.classList.add('far');
+        });
+        document.querySelector('.rating-text').textContent = '0/5';
+        selectedRating = 0;
+
+        // Reload reviews
+        await loadReviews();
+        alert('Thank you for your review!');
+    } catch (error) {
+        console.error('Error submitting review:', error);
+        alert(error.message || 'An error occurred while submitting your review');
     }
-
-    const comment = document.getElementById('review-comment').value.trim();
-    const rating = selectedRating;
-
-    if (rating === 0) {
-        alert('Please select a rating');
-        return;
-    }
-
-    if (comment === '') {
-        alert('Please enter your review comment');
-        return;
-    }
-
-    const reviews = JSON.parse(localStorage.getItem('shopReviews')) || [];
-
-    reviews.push({
-        username: loggedInUser.username,
-        profilePicture: loggedInUser.profilePicture,
-        rating,
-        comment,
-        date: new Date().toISOString()
-    });
-
-    localStorage.setItem('shopReviews', JSON.stringify(reviews));
-
-    // Reset form
-    document.getElementById('review-comment').value = '';
-    stars.forEach(star => {
-        star.classList.remove('fas');
-        star.classList.add('far');
-    });
-    document.querySelector('.rating-text').textContent = '0/5';
-    selectedRating = 0;
-
-    // Reload reviews
-    loadReviews();
-    alert('Thank you for your review!');
 }
 
 /**
@@ -635,7 +457,7 @@ function initReviews() {
     // Load reviews
     loadReviews();
 
-    // Handle review submission
+    // Handle star rating selection
     stars = document.querySelectorAll('.stars i');
 
     stars.forEach(star => {
@@ -654,7 +476,81 @@ function initReviews() {
         });
     });
 
-    document.getElementById('submit-review').addEventListener('click', submitReview);
+    // Handle review submission
+    const submitBtn = document.getElementById('submit-review');
+    if (submitBtn) {
+        submitBtn.addEventListener('click', submitReview);
+    }
+}
+
+/* ======================
+   FLASH SALE FUNCTIONS
+   ====================== */
+
+/**
+ * Loads and displays active flash sales
+ */
+async function loadFlashSale() {
+    try {
+        const response = await fetch('sales.php?action=active');
+        
+        if (!response.ok) {
+            throw new Error('Failed to load flash sale');
+        }
+        
+        const data = await response.json();
+        const container = document.getElementById('flash-sale-container');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        if (!data.success || data.sales.length === 0) {
+            container.style.display = 'none';
+            return;
+        }
+        
+        // Display the first active flash sale
+        const sale = data.sales[0];
+        const now = new Date();
+        const end = new Date(sale.end_time);
+        
+        // Calculate time left
+        const diff = end - now;
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        
+        container.innerHTML = `
+            <div class="flash-sale-banner">
+                <div class="flash-sale-content">
+                    <h2>${sale.name}</h2>
+                    <p class="flash-sale-discount">
+                        ${sale.discount_type === 'percentage' ? 
+                          `${sale.discount_value}% OFF` : 
+                          `₱${sale.discount_value} OFF`}
+                    </p>
+                    <p class="flash-sale-time">Ends in: ${days}d ${hours}h ${minutes}m</p>
+                    <a href="#product-grid" class="flash-sale-button">Shop Now</a>
+                </div>
+            </div>
+        `;
+        
+        container.style.display = 'block';
+    } catch (error) {
+        console.error('Error loading flash sale:', error);
+    }
+}
+
+/* ======================
+   UTILITY FUNCTIONS
+   ====================== */
+
+/**
+ * Gets CSRF token from meta tag
+ */
+function getCsrfToken() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute('content') : '';
 }
 
 /* ======================
@@ -664,33 +560,34 @@ function initReviews() {
 /**
  * Initializes all functionality when the DOM is loaded
  */
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     try {
-        // Check ban status first
-        if (!checkUserBanStatus()) return;
-        
         // Initialize general utilities
         initSmoothScrolling();
         initQuickView();
         
+        // Initialize authentication functionality
+        await setupLoginLogout();
+        
         // Initialize cart and reservation functionality
-        setupLoginLogout();
+        setupAddToCartButtons();
+        await updateCartCount();
         
-        // Load flash sale
-        loadFlashSale();
+        // Initialize reviews functionality
+        initReviews();
         
-        // Initialize reviews if on a page with reviews
-        if (document.getElementById('reviews-container')) {
-            initReviews();
+        // Load flash sale if on index page
+        if (window.location.pathname.includes('index.php') || window.location.pathname === '/') {
+            await loadFlashSale();
         }
-        
-        // Listen for flash sale updates from admin
-        window.addEventListener('storage', function(e) {
-            if (e.key === 'flashSales') {
-                loadFlashSale();
-            }
-        });
     } catch (error) {
         console.error('Error initializing application:', error);
+    }
+});
+
+// Listen for storage events (for real-time updates)
+window.addEventListener('storage', function(e) {
+    if (e.key === 'cartUpdate') {
+        updateCartCount();
     }
 });

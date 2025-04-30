@@ -1,72 +1,125 @@
 <?php
+require_once 'config.php';
 session_start();
-require_once 'includes/auth_functions.php';
 
-// Check if user is logged in and is admin
-if (!isset($_SESSION['user_id']) || !isset($_SESSION['is_admin']) || !$_SESSION['is_admin']) {
-    header("Location: login.php");
-    exit;
+// Check if admin is logged in
+if (!isset($_SESSION['user_id']) || !$_SESSION['is_admin']) {
+    header('Location: login.php');
+    exit();
 }
 
-// Verify admin code
-if (!isset($_SESSION['admin_code']) || $_SESSION['admin_code'] !== 'Rimuru123') {
-    header("Location: login.php");
-    exit;
+// Get admin user data
+$adminId = $_SESSION['user_id'];
+$stmt = $conn->prepare("SELECT * FROM users WHERE user_id = ?");
+$stmt->execute([$adminId]);
+$adminUser = $stmt->fetch(PDO::FETCH_ASSOC);
+
+if (!$adminUser) {
+    session_destroy();
+    header('Location: login.php');
+    exit();
 }
 
-// Database connection
-$conn = db_connect();
+// Handle AJAX requests
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    header('Content-Type: application/json');
+    
+    switch ($_POST['action']) {
+        case 'get_dashboard_data':
+            echo json_encode(getDashboardData($conn));
+            exit();
+        case 'get_products':
+            echo json_encode(getProducts($conn));
+            exit();
+        case 'get_reservations':
+            echo json_encode(getReservations($conn));
+            exit();
+        case 'get_users':
+            echo json_encode(getUsers($conn));
+            exit();
+        case 'get_feedback':
+            echo json_encode(getFeedback($conn));
+            exit();
+        case 'get_orders':
+            echo json_encode(getOrders($conn));
+            exit();
+        case 'get_flash_sales':
+            echo json_encode(getFlashSales($conn));
+            exit();
+        // Add more cases for other actions
+    }
+}
 
-// Get dashboard stats
-function getDashboardStats($conn) {
-    $stats = [
+function getDashboardData($conn) {
+    // Implement your dashboard data retrieval
+    $data = [
         'total_products' => 0,
         'total_users' => 0,
         'active_reservations' => 0,
         'picked_orders' => 0,
-        'total_revenue' => 0
+        'total_revenue' => 0,
+        'sales_data' => [],
+        'reservation_status_data' => []
     ];
-
-    // Get product count
-    $result = $conn->query("SELECT COUNT(*) as count FROM products");
-    if ($result) {
-        $row = $result->fetch_assoc();
-        $stats['total_products'] = $row['count'];
-    }
-
-    // Get user count
-    $result = $conn->query("SELECT COUNT(*) as count FROM users WHERE is_admin = 0");
-    if ($result) {
-        $row = $result->fetch_assoc();
-        $stats['total_users'] = $row['count'];
-    }
-
+    
+    // Get total products
+    $stmt = $conn->query("SELECT COUNT(*) FROM products");
+    $data['total_products'] = $stmt->fetchColumn();
+    
+    // Get total users
+    $stmt = $conn->query("SELECT COUNT(*) FROM users");
+    $data['total_users'] = $stmt->fetchColumn();
+    
     // Get active reservations
-    $result = $conn->query("SELECT COUNT(*) as count FROM reservations WHERE status IN ('pending', 'reserved', 'confirmed')");
-    if ($result) {
-        $row = $result->fetch_assoc();
-        $stats['active_reservations'] = $row['count'];
-    }
-
+    $stmt = $conn->query("SELECT COUNT(*) FROM reservations WHERE status IN ('reserved', 'confirmed')");
+    $data['active_reservations'] = $stmt->fetchColumn();
+    
     // Get picked orders
-    $result = $conn->query("SELECT COUNT(*) as count FROM reservations WHERE status = 'completed'");
-    if ($result) {
-        $row = $result->fetch_assoc();
-        $stats['picked_orders'] = $row['count'];
-    }
-
+    $stmt = $conn->query("SELECT COUNT(*) FROM reservations WHERE status = 'completed'");
+    $data['picked_orders'] = $stmt->fetchColumn();
+    
     // Get total revenue
-    $result = $conn->query("SELECT SUM(total_price) as total FROM reservations WHERE status = 'completed'");
-    if ($result) {
-        $row = $result->fetch_assoc();
-        $stats['total_revenue'] = $row['total'] ?? 0;
+    $stmt = $conn->query("SELECT SUM(total_price) FROM reservations WHERE status = 'completed'");
+    $data['total_revenue'] = $stmt->fetchColumn() ?? 0;
+    
+    // Get sales data (example - adjust as needed)
+    $stmt = $conn->query("SELECT MONTH(created_at) as month, SUM(total_price) as total 
+                         FROM reservations 
+                         WHERE status = 'completed' 
+                         GROUP BY MONTH(created_at)");
+    $salesData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    $monthlySales = array_fill(1, 12, 0);
+    foreach ($salesData as $sale) {
+        $monthlySales[$sale['month']] = (float)$sale['total'];
     }
-
-    return $stats;
+    $data['sales_data'] = array_values($monthlySales);
+    
+    // Get reservation status data
+    $statusData = [
+        'pending' => 0,
+        'reserved' => 0,
+        'confirmed' => 0,
+        'completed' => 0,
+        'expired' => 0
+    ];
+    
+    $stmt = $conn->query("SELECT status, COUNT(*) as count FROM reservations GROUP BY status");
+    $statusCounts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    foreach ($statusCounts as $count) {
+        $statusData[$count['status']] = (int)$count['count'];
+    }
+    
+    $data['reservation_status_data'] = array_values($statusData);
+    
+    return ['success' => true, 'data' => $data];
 }
 
-$dashboardStats = getDashboardStats($conn);
+// Implement similar functions for other data retrieval (products, reservations, users, etc.)
+
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -76,462 +129,8 @@ $dashboardStats = getDashboardStats($conn);
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.css">
     <style>
-        /* Admin Dashboard Specific Styles */
-        :root {
-            --admin-primary: #4a6bff;
-            --admin-secondary: #ff6b6b;
-            --admin-dark: #2c3e50;
-            --admin-light: #f8f9fa;
-            --admin-gray: #6c757d;
-            --admin-success: #28a745;
-            --admin-warning: #ffc107;
-            --admin-danger: #dc3545;
-            --admin-sidebar-width: 250px;
-        }
-
-        body.admin-body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f5f7fa;
-            display: flex;
-            min-height: 100vh;
-            margin: 0;
-            padding: 0;
-        }
-
-        /* Sidebar Styles */
-        .admin-sidebar {
-            width: var(--admin-sidebar-width);
-            background-color: var(--admin-dark);
-            color: white;
-            height: 100vh;
-            position: fixed;
-            padding: 20px 0;
-            transition: all 0.3s;
-        }
-
-        .sidebar-header {
-            padding: 0 20px 20px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .sidebar-header h2 {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .sidebar-menu {
-            padding: 20px 0;
-        }
-
-        .sidebar-menu a {
-            display: flex;
-            align-items: center;
-            padding: 12px 20px;
-            color: white;
-            text-decoration: none;
-            transition: all 0.3s;
-            gap: 10px;
-        }
-
-        .sidebar-menu a:hover, 
-        .sidebar-menu a.active {
-            background-color: rgba(255, 255, 255, 0.1);
-        }
-
-        .sidebar-menu a i {
-            width: 20px;
-            text-align: center;
-        }
-
-        /* Main Content Styles */
-        .admin-main-content {
-            flex: 1;
-            margin-left: var(--admin-sidebar-width);
-            padding: 20px;
-        }
-
-        .admin-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-            padding-bottom: 20px;
-            border-bottom: 1px solid #e0e0e0;
-        }
-
-        .admin-header h1 {
-            font-size: 1.8rem;
-            color: var(--admin-dark);
-        }
-
-        .admin-logout-btn {
-            background-color: var(--admin-secondary);
-            color: white;
-            border: none;
-            padding: 8px 15px;
-            border-radius: 4px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        /* Dashboard Cards */
-        .dashboard-cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .admin-card {
-            background-color: white;
-            border-radius: 8px;
-            padding: 20px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-
-        .admin-card h3 {
-            font-size: 1rem;
-            color: #666;
-            margin-bottom: 10px;
-        }
-
-        .admin-card .value {
-            font-size: 2rem;
-            font-weight: bold;
-            color: var(--admin-dark);
-        }
-
-        /* Charts Section */
-        .admin-charts {
-            display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .chart-container {
-            background-color: white;
-            border-radius: 8px;
-            padding: 20px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            height: 350px;
-        }
-
-        /* Tables */
-        .admin-table-container {
-            background-color: white;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-            margin-bottom: 30px;
-        }
-
-        .admin-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .admin-table th, 
-        .admin-table td {
-            padding: 12px 15px;
-            text-align: left;
-            border-bottom: 1px solid #e0e0e0;
-        }
-
-        .admin-table th {
-            background-color: #f8f9fa;
-            font-weight: 600;
-        }
-
-        .admin-table tr:hover {
-            background-color: #f8f9fa;
-        }
-
-        .admin-status {
-            padding: 5px 10px;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 500;
-        }
-
-        .admin-status-pending {
-            background-color: #fff3cd;
-            color: #856404;
-        }
-
-        .admin-status-reserved {
-            background-color: #d1e7ff;
-            color: #084298;
-        }
-
-        .admin-status-confirmed {
-            background-color: #d4edda;
-            color: #155724;
-        }
-
-        .admin-status-completed {
-            background-color: #d1ecf1;
-            color: #0c5460;
-        }
-
-        .admin-status-expired {
-            background-color: #f8d7da;
-            color: #721c24;
-        }
-
-        .admin-action-btn {
-            padding: 5px 10px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            margin-right: 5px;
-            font-size: 0.8rem;
-            transition: all 0.2s;
-        }
-
-        .admin-edit-btn {
-            background-color: var(--admin-primary);
-            color: white;
-        }
-
-        .admin-delete-btn {
-            background-color: var(--admin-secondary);
-            color: white;
-        }
-
-        .admin-confirm-btn {
-            background-color: var(--admin-success);
-            color: white;
-        }
-
-        .admin-complete-btn {
-            background-color: #17a2b8;
-            color: white;
-        }
-
-        /* Modal Styles */
-        .admin-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .admin-modal-content {
-            background-color: white;
-            border-radius: 8px;
-            width: 90%;
-            max-width: 500px;
-            padding: 25px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-            margin: 20px;
-            max-height: 90vh;
-            overflow-y: auto;
-        }
-
-        .admin-modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-
-        .admin-modal-header h2 {
-            font-size: 1.3rem;
-            color: var(--admin-dark);
-        }
-
-        .admin-close-btn {
-            background: none;
-            border: none;
-            font-size: 1.5rem;
-            cursor: pointer;
-            color: var(--admin-gray);
-        }
-
-        .admin-form-group {
-            margin-bottom: 15px;
-        }
-
-        .admin-form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 500;
-        }
-
-        .admin-form-group input, 
-        .admin-form-group select, 
-        .admin-form-group textarea {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-
-        .admin-form-actions {
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-            margin-top: 20px;
-        }
-
-        .admin-btn {
-            padding: 8px 15px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-
-        .admin-btn-primary {
-            background-color: var(--admin-primary);
-            color: white;
-        }
-
-        .admin-btn-secondary {
-            background-color: var(--admin-gray);
-            color: white;
-        }
-
-        /* Size quantities styles */
-        .admin-size-quantities {
-            margin-bottom: 10px;
-        }
-
-        .admin-size-quantity-row {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
-            align-items: center;
-        }
-
-        .admin-size-quantity-row select {
-            flex: 1;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-
-        .admin-size-quantity-row input {
-            width: 80px;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-
-        .admin-remove-size-btn {
-            background: none;
-            border: none;
-            color: var(--admin-secondary);
-            cursor: pointer;
-            font-size: 1rem;
-        }
-
-        /* Banned user styles */
-        .admin-banned-user {
-            background-color: rgba(255, 0, 0, 0.05) !important;
-        }
-
-        .admin-banned-user td {
-            opacity: 0.8;
-        }
-
-        /* Updated Checkbox Styles */
-        .admin-checkbox-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 8px 0;
-        }
-
-        .admin-checkbox-item input[type="checkbox"] {
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            appearance: none;
-            width: 18px;
-            height: 18px;
-            border: 2px solid var(--admin-gray);
-            border-radius: 3px;
-            outline: none;
-            cursor: pointer;
-            position: relative;
-            transition: all 0.2s;
-        }
-
-        .admin-checkbox-item input[type="checkbox"]:checked {
-            background-color: var(--admin-primary);
-            border-color: var(--admin-primary);
-        }
-
-        .admin-checkbox-item input[type="checkbox"]:checked::after {
-            content: '';
-            position: absolute;
-            left: 5px;
-            top: 1px;
-            width: 5px;
-            height: 10px;
-            border: solid white;
-            border-width: 0 2px 2px 0;
-            transform: rotate(45deg);
-        }
-
-        .admin-checkbox-item label {
-            cursor: pointer;
-            user-select: none;
-        }
-
-        .product-name {
-            font-weight: 500;
-            color: var(--admin-dark);
-        }
-
-        .product-category {
-            color: var(--admin-gray);
-            font-size: 0.85rem;
-            background-color: rgba(108, 117, 125, 0.1);
-            padding: 3px 8px;
-            border-radius: 4px;
-        }
-
-        /* Responsive Design */
-        @media (max-width: 992px) {
-            .admin-charts {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        @media (max-width: 768px) {
-            .admin-sidebar {
-                width: 70px;
-                overflow: hidden;
-            }
-            
-            .sidebar-menu a span {
-                display: none;
-            }
-            
-            .admin-main-content {
-                margin-left: 70px;
-            }
-        }
-
-        @media (max-width: 576px) {
-            .dashboard-cards {
-                grid-template-columns: 1fr;
-            }
-            
-            .admin-action-btn span {
-                display: none;
-            }
-        }
+        /* Keep all the existing CSS styles from admin-dashboard.html */
+        <?php include 'admin-styles.css'; ?>
     </style>
 </head>
 <body class="admin-body">
@@ -563,23 +162,23 @@ $dashboardStats = getDashboardStats($conn);
             <div class="dashboard-cards">
                 <div class="admin-card">
                     <h3>Total Products</h3>
-                    <div class="value" id="total-products"><?php echo $dashboardStats['total_products']; ?></div>
+                    <div class="value" id="total-products">0</div>
                 </div>
                 <div class="admin-card">
                     <h3>Total Users</h3>
-                    <div class="value" id="total-users"><?php echo $dashboardStats['total_users']; ?></div>
+                    <div class="value" id="total-users">0</div>
                 </div>
                 <div class="admin-card">
                     <h3>Active Reservations</h3>
-                    <div class="value" id="active-reservations"><?php echo $dashboardStats['active_reservations']; ?></div>
+                    <div class="value" id="active-reservations">0</div>
                 </div>
                 <div class="admin-card">
                     <h3>Picked Orders</h3>
-                    <div class="value" id="picked-orders"><?php echo $dashboardStats['picked_orders']; ?></div>
+                    <div class="value" id="picked-orders">0</div>
                 </div>
                 <div class="admin-card">
                     <h3>Revenue</h3>
-                    <div class="value" id="total-revenue">₱<?php echo number_format($dashboardStats['total_revenue'], 2); ?></div>
+                    <div class="value" id="total-revenue">₱0.00</div>
                 </div>
             </div>
 
@@ -755,7 +354,8 @@ $dashboardStats = getDashboardStats($conn);
         </div>
     </div>
 
-    <!-- Product Modal -->
+
+       <!-- Product Modal -->
     <div class="admin-modal" id="product-modal">
         <div class="admin-modal-content">
             <div class="admin-modal-header">
@@ -869,8 +469,158 @@ $dashboardStats = getDashboardStats($conn);
             </form>
         </div>
     </div>
+    </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
     <script src="admin.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+    <script>
+    // Updated admin.js with AJAX calls
+    document.addEventListener('DOMContentLoaded', function() {
+        // Navigation
+        const navLinks = document.querySelectorAll('.sidebar-menu a');
+        const sections = document.querySelectorAll('[id$="-section"]');
+        
+        navLinks.forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const sectionId = this.dataset.section + '-section';
+                
+                // Update active link
+                navLinks.forEach(l => l.classList.remove('active'));
+                this.classList.add('active');
+                
+                // Show selected section
+                sections.forEach(section => {
+                    section.style.display = 'none';
+                });
+                document.getElementById(sectionId).style.display = 'block';
+                
+                // Load section data
+                loadSectionData(this.dataset.section);
+            });
+        });
+
+        // Logout
+        document.getElementById('logout-btn').addEventListener('click', function() {
+            fetch('logout.php')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        window.location.href = 'login.php';
+                    }
+                });
+        });
+
+        // Initialize dashboard
+        loadSectionData('dashboard');
+
+        // Modal functionality and other event listeners...
+    });
+
+    function loadSectionData(section) {
+        const actions = {
+            'dashboard': 'get_dashboard_data',
+            'products': 'get_products',
+            'reservations': 'get_reservations',
+            'users': 'get_users',
+            'feedback': 'get_feedback',
+            'orders': 'get_orders',
+            'flashsales': 'get_flash_sales'
+        };
+
+        fetch('admin-dashboard.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `action=${actions[section]}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                switch(section) {
+                    case 'dashboard':
+                        updateDashboard(data.data);
+                        break;
+                    case 'products':
+                        updateProducts(data.data);
+                        break;
+                    // Add cases for other sections
+                }
+            }
+        });
+    }
+
+    function updateDashboard(data) {
+        document.getElementById('total-products').textContent = data.total_products;
+        document.getElementById('total-users').textContent = data.total_users;
+        document.getElementById('active-reservations').textContent = data.active_reservations;
+        document.getElementById('picked-orders').textContent = data.picked_orders;
+        document.getElementById('total-revenue').textContent = `₱${data.total_revenue.toFixed(2)}`;
+        
+        // Update charts
+        updateCharts(data.sales_data, data.reservation_status_data);
+    }
+
+    function updateCharts(salesData, statusData) {
+        // Sales chart
+        const salesCtx = document.getElementById('salesChart').getContext('2d');
+        new Chart(salesCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+                datasets: [{
+                    label: 'Sales',
+                    data: salesData,
+                    backgroundColor: 'rgba(74, 107, 255, 0.2)',
+                    borderColor: 'rgba(74, 107, 255, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+        
+        // Reservation status chart
+        const statusCtx = document.getElementById('reservationStatusChart').getContext('2d');
+        new Chart(statusCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Pending', 'Reserved', 'Confirmed', 'Completed', 'Expired'],
+                datasets: [{
+                    data: statusData,
+                    backgroundColor: [
+                        'rgba(255, 206, 86, 0.2)',
+                        'rgba(75, 192, 192, 0.2)',
+                        'rgba(54, 162, 235, 0.2)',
+                        'rgba(153, 102, 255, 0.2)',
+                        'rgba(255, 99, 132, 0.2)'
+                    ],
+                    borderColor: [
+                        'rgba(255, 206, 86, 1)',
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(54, 162, 235, 1)',
+                        'rgba(153, 102, 255, 1)',
+                        'rgba(255, 99, 132, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+    }
+
+    // Implement similar functions for other sections (products, reservations, etc.)
+    </script>
 </body>
 </html>

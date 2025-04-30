@@ -1,0 +1,4 @@
+[26-Apr-2025 03:43:39 Europe/Berlin] PHP Warning:  session_set_cookie_params(): Session cookie parameters cannot be changed when a session is active in C:\xampp\htdocs\onlyatsham\config.php on line 9
+[26-Apr-2025 03:43:39 Europe/Berlin] Database error: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'token_hash' in 'field list'
+[26-Apr-2025 09:43:41 Europe/Berlin] PHP Warning:  session_set_cookie_params(): Session cookie parameters cannot be changed when a session is active in C:\xampp\htdocs\onlyatsham\config.php on line 9
+[26-Apr-2025 09:43:41 Europe/Berlin] Database error: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'token_hash' in 'field list'
