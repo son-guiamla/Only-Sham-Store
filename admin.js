@@ -13,56 +13,65 @@ document.addEventListener('DOMContentLoaded', function() {
         const sections = document.querySelectorAll('[id$="-section"]');
         
         navLinks.forEach(link => {
-            link.addEventListener('click', function(e) {
-                e.preventDefault();
-                const sectionId = this.dataset.section + '-section';
-                
-                // Update active link
-                navLinks.forEach(l => l.classList.remove('active'));
-                this.classList.add('active');
-                
-                // Show selected section
-                sections.forEach(section => {
-                    section.style.display = 'none';
-                });
-                document.getElementById(sectionId).style.display = 'block';
-                
-                // Refresh section data when clicked
-                switch(this.dataset.section) {
-                    case 'dashboard':
-                        loadDashboardData();
-                        break;
-                    case 'products':
-                        loadProducts();
-                        break;
-                    case 'reservations':
-                        loadReservations();
-                        break;
-                    case 'users':
-                        loadUsers();
-                        break;
-                    case 'feedback':
-                        loadFeedback();
-                        break;
-                    case 'orders':
-                        loadOrderHistory();
-                        break;
-                    case 'flashsales':
-                        loadFlashSales();
-                        break;
-                }
-            });
+    link.addEventListener('click', function(e) {
+        e.preventDefault();
+        const sectionId = this.dataset.section + '-section';
+        
+        // Remove old event listeners before adding new ones
+        removeAllEventListeners();
+
+        // Update active link
+        navLinks.forEach(l => l.classList.remove('active'));
+        this.classList.add('active');
+        
+        // Show selected section
+        sections.forEach(section => {
+            section.style.display = 'none';
         });
+        document.getElementById(sectionId).style.display = 'block';
+        
+        // Refresh section data when clicked
+        switch(this.dataset.section) {
+            case 'dashboard':
+                loadDashboardData();
+                break;
+            case 'products':
+                loadProducts();
+                break;
+            case 'reservations':
+                loadReservations();
+                break;
+            case 'users':
+                loadUsers();
+                break;
+            case 'feedback':
+                loadFeedback();
+                break;
+            case 'orders':
+                loadOrderHistory();
+                break;
+            case 'flashsales':
+                loadFlashSales();
+                break;
+        }
+    });
+});
+
+function removeAllEventListeners() {
+    // Remove all dynamically added event listeners
+    document.querySelectorAll('.admin-edit-btn, .admin-delete-btn, .admin-confirm-btn, .admin-complete-btn').forEach(el => {
+        el.replaceWith(el.cloneNode(true));
+    });
+}
 
         // Logout
         const logoutBtn = document.getElementById('logout-btn');
-        if (logoutBtn) {
-            logoutBtn.addEventListener('click', function() {
-                localStorage.removeItem('loggedInAdmin');
-                window.location.href = 'login.html';
-            });
-        }
-
+if (logoutBtn) {
+    logoutBtn.addEventListener('click', function() {
+        localStorage.removeItem('loggedInAdmin');
+        window.location.href = 'login.html';
+    });
+}
         // Initialize dashboard
         loadDashboardData();
 
@@ -231,10 +240,11 @@ function loadDashboardData() {
 function initCharts(users) {
     try {
         // Sales chart
-        const salesData = getSalesData(users);
-        const salesCtx = document.getElementById('salesChart')?.getContext('2d');
-        
-        if (salesCtx) {
+        const salesCanvas = document.getElementById('salesChart');
+        if (salesCanvas) {
+            const salesCtx = salesCanvas.getContext('2d');
+            const salesData = getSalesData(users);
+            
             new Chart(salesCtx, {
                 type: 'bar',
                 data: {
@@ -260,10 +270,11 @@ function initCharts(users) {
         }
         
         // Reservation status chart
-        const statusData = getReservationStatusData(users);
-        const statusCtx = document.getElementById('reservationStatusChart')?.getContext('2d');
-        
-        if (statusCtx) {
+        const statusCanvas = document.getElementById('reservationStatusChart');
+        if (statusCanvas) {
+            const statusCtx = statusCanvas.getContext('2d');
+            const statusData = getReservationStatusData(users);
+            
             new Chart(statusCtx, {
                 type: 'doughnut',
                 data: {
@@ -297,7 +308,6 @@ function initCharts(users) {
         console.error('Error initializing charts:', error);
     }
 }
-
 function getSalesData(users) {
     const monthlySales = Array(12).fill(0);
     const now = new Date();
@@ -1316,53 +1326,22 @@ function deleteFlashSale(id) {
     }
 }
 
-// Initialize the admin dashboard when DOM is loaded
-document.addEventListener('DOMContentLoaded', function() {
-    // Set active section based on URL hash if present
-    const hash = window.location.hash.substring(1);
-    if (hash) {
-        const section = document.getElementById(`${hash}-section`);
-        if (section) {
-            // Hide all sections first
-            document.querySelectorAll('[id$="-section"]').forEach(s => {
-                s.style.display = 'none';
-            });
-            
-            // Show the requested section
-            section.style.display = 'block';
-            
-            // Update active nav link
-            document.querySelectorAll('.sidebar-menu a').forEach(link => {
-                link.classList.remove('active');
-                if (link.dataset.section === hash) {
-                    link.classList.add('active');
-                }
-            });
-            
-            // Load section data
-            switch(hash) {
-                case 'dashboard':
-                    loadDashboardData();
-                    break;
-                case 'products':
-                    loadProducts();
-                    break;
-                case 'reservations':
-                    loadReservations();
-                    break;
-                case 'users':
-                    loadUsers();
-                    break;
-                case 'feedback':
-                    loadFeedback();
-                    break;
-                case 'orders':
-                    loadOrderHistory();
-                    break;
-                case 'flashsales':
-                    loadFlashSales();
-                    break;
-            }
-        }
-    }
+navLinks.forEach(link => {
+    link.addEventListener('click', function(e) {
+        e.preventDefault();
+        const sectionId = this.dataset.section + '-section';
+        
+        // Remove old event listeners before adding new ones
+        removeAllEventListeners();
+        
+        
+    });
 });
+
+function removeAllEventListeners() {
+    // Remove all dynamically added event listeners
+    // This is a simplified example - you'd need to track listeners
+    document.querySelectorAll('.admin-edit-btn, .admin-delete-btn, etc').forEach(el => {
+        el.replaceWith(el.cloneNode(true));
+    });
+}
