@@ -645,7 +645,6 @@ function saveProduct() {
             reader.onload = function(e) {
                 const imageUrl = e.target.result;
                 saveProductData(id, name, price, imageUrl, description, category, featured, sizeQuantities, products);
-                window.dispatchEvent(new Event('storage')); // Added here for image upload case
             };
             reader.onerror = function() {
                 alert('Error reading image file');
@@ -658,7 +657,6 @@ function saveProduct() {
                 imageUrl = products[id].image;
             }
             saveProductData(id, name, price, imageUrl, description, category, featured, sizeQuantities, products);
-            window.dispatchEvent(new Event('storage')); // Added here for non-image upload case
         }
     } catch (error) {
         console.error('Error saving product:', error);
@@ -683,9 +681,9 @@ function deleteProduct(id) {
             
             localStorage.setItem('products', JSON.stringify(products));
             localStorage.setItem('users', JSON.stringify(users));
-            window.dispatchEvent(new Event('storage')); // Added this line
             
             loadProducts();
+            window.dispatchEvent(new Event('storage'));
         } catch (error) {
             console.error('Error deleting product:', error);
         }
@@ -1032,9 +1030,9 @@ function toggleBanUser (id) {
             localStorage.setItem('users', JSON.stringify(users));
             
             // If banning the currently logged in user, log them out
-            const loggedInUser  = JSON.parse(localStorage.getItem('loggedInUser '));
+            const loggedInUser  = JSON.parse(localStorage.getItem('loggedInUser'));
             if (loggedInUser  && loggedInUser .username === users[id].username) {
-                localStorage.removeItem('loggedInUser ');
+                localStorage.removeItem('loggedInUser');
                 window.location.href = 'login.html?banned=true';
                 return;
             }
@@ -1053,9 +1051,9 @@ function deleteUser (id) {
             const userToDelete = users[id];
             
             // If deleting the currently logged in user, log them out first
-            const loggedInUser  = JSON.parse(localStorage.getItem('loggedInUser '));
+            const loggedInUser  = JSON.parse(localStorage.getItem('loggedInUser'));
             if (loggedInUser  && loggedInUser .username === userToDelete.username) {
-                localStorage.removeItem('loggedInUser ');
+                localStorage.removeItem('loggedInUser');
             }
             
             users.splice(id, 1);

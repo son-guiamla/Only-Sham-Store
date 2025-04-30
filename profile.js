@@ -25,7 +25,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 reader.onload = function(event) {
                     profilePicture.src = event.target.result;
                     saveProfilePicture(event.target.result);
-                    updateProfileIcon();
                 };
                 reader.readAsDataURL(file);
             }
@@ -36,7 +35,6 @@ document.addEventListener('DOMContentLoaded', function() {
         removePictureBtn.addEventListener('click', function() {
             profilePicture.src = 'assets/default-profile.png';
             removeProfilePicture();
-            updateProfileIcon();
         });
     }
 
@@ -83,41 +81,42 @@ function loadUserProfile() {
         // Load profile picture
         const profilePicture = document.getElementById('profile-picture');
         if (profilePicture) {
-            const pictureSrc = user.profilePicture || 
-                             loggedInUser.profilePicture || 
-                             'assets/default-profile.png';
-            profilePicture.src = pictureSrc;
-            
-            // Ensure consistency
-            if (pictureSrc !== 'assets/default-profile.png') {
-                saveProfilePicture(pictureSrc);
-            }
+            profilePicture.src = user.profilePicture || 'assets/default-profile.png';
         }
 
         // Load personal info
-        document.getElementById('full-name').value = user.fullname || '';
-        document.getElementById('username').value = user.username || '';
-        document.getElementById('email').value = user.email || '';
-        document.getElementById('phone').value = user.phone || '';
-        document.getElementById('gender').value = user.gender || '';
+        if (document.getElementById('full-name')) {
+            document.getElementById('full-name').value = user.fullname || '';
+        }
+        if (document.getElementById('username')) {
+            document.getElementById('username').value = user.username || '';
+        }
+        if (document.getElementById('email')) {
+            document.getElementById('email').value = user.email || '';
+        }
+        if (document.getElementById('phone')) {
+            document.getElementById('phone').value = user.phone || '';
+        }
+        if (document.getElementById('gender')) {
+            document.getElementById('gender').value = user.gender || '';
+        }
     }
 }
 
-function saveProfilePicture(imageUrl) {
+function saveProfilePicture(imageData) {
     const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
     const users = JSON.parse(localStorage.getItem('users')) || [];
-    
-    if (loggedInUser) {
-        // Update loggedInUser
-        loggedInUser.profilePicture = imageUrl;
+    const userIndex = users.findIndex(u => u.username === loggedInUser.username);
+
+    if (userIndex !== -1) {
+        users[userIndex].profilePicture = imageData;
+        localStorage.setItem('users', JSON.stringify(users));
+        
+        // Update loggedInUser in localStorage
+        loggedInUser.profilePicture = imageData;
         localStorage.setItem('loggedInUser', JSON.stringify(loggedInUser));
         
-        // Update in users array
-        const userIndex = users.findIndex(u => u.username === loggedInUser.username);
-        if (userIndex !== -1) {
-            users[userIndex].profilePicture = imageUrl;
-            localStorage.setItem('users', JSON.stringify(users));
-        }
+        updateProfileIcon();
     }
 }
 
@@ -127,12 +126,14 @@ function removeProfilePicture() {
     const userIndex = users.findIndex(u => u.username === loggedInUser.username);
 
     if (userIndex !== -1) {
-        // Remove from both locations
-        users[userIndex].profilePicture = 'assets/default-profile.png';
-        loggedInUser.profilePicture = 'assets/default-profile.png';
-        
+        delete users[userIndex].profilePicture;
         localStorage.setItem('users', JSON.stringify(users));
+        
+        // Update loggedInUser in localStorage
+        delete loggedInUser.profilePicture;
         localStorage.setItem('loggedInUser', JSON.stringify(loggedInUser));
+        
+        updateProfileIcon();
     }
 }
 
@@ -141,7 +142,7 @@ function updateProfileIcon() {
     const profileIcons = document.querySelectorAll('.profile-icon');
     
     profileIcons.forEach(icon => {
-        if (loggedInUser?.profilePicture && loggedInUser.profilePicture !== 'assets/default-profile.png') {
+        if (loggedInUser?.profilePicture) {
             // Replace the icon with the profile picture
             icon.innerHTML = `<img src="${loggedInUser.profilePicture}" alt="Profile" class="profile-icon-img">`;
             
@@ -190,7 +191,7 @@ function updatePersonalInfo() {
 
         localStorage.setItem('users', JSON.stringify(users));
         
-        // Update loggedInUser
+        // Update loggedInUser in localStorage
         loggedInUser.fullname = fullName;
         loggedInUser.username = username;
         loggedInUser.email = email;
@@ -233,7 +234,7 @@ function updatePassword() {
         users[userIndex].password = newPassword;
         localStorage.setItem('users', JSON.stringify(users));
         
-        // Update loggedInUser
+        // Update loggedInUser in localStorage
         loggedInUser.password = newPassword;
         localStorage.setItem('loggedInUser', JSON.stringify(loggedInUser));
 
@@ -267,6 +268,7 @@ function loadReservations() {
         html += '<div class="reservation-section"><h3>Active Reservations</h3>';
         
         user.cart.forEach((item, index) => {
+            // Skip pending items (only show reserved/confirmed)
             if (item.status === 'pending') return;
             
             let status, statusClass;
@@ -277,6 +279,7 @@ function loadReservations() {
                 status = 'reserved';
                 statusClass = 'status-reserved';
                 
+                // Check if reservation is expired (3 days from reservedAt)
                 if (item.reservedAt) {
                     const expiryDate = new Date(item.reservedAt);
                     expiryDate.setDate(expiryDate.getDate() + 3);
@@ -344,6 +347,7 @@ function loadReservations() {
         html += '</div>';
     }
 
+    // Add total spending
     if (totalSpent > 0) {
         html += `<div class="total-spending">Total Cost: ₱${totalSpent.toFixed(2)}</div>`;
     }
@@ -375,10 +379,13 @@ function cancelReservation(index, isPickedItem = false) {
     if (userIndex === -1) return;
 
     if (isPickedItem) {
+        // Remove from picked items
         users[userIndex].pickedItems.splice(index, 1);
     } else {
+        // Cancel reservation from cart
         const item = users[userIndex].cart[index];
         
+        // Restore stock for reserved items
         if (item.status === 'reserved' || item.status === 'confirmed') {
             const products = JSON.parse(localStorage.getItem('products')) || [];
             const productIndex = products.findIndex(p => p.id === item.productId);
@@ -392,34 +399,11 @@ function cancelReservation(index, isPickedItem = false) {
     }
 
     localStorage.setItem('users', JSON.stringify(users));
+    
+    // Update loggedInUser
     const updatedUser = users[userIndex];
     localStorage.setItem('loggedInUser', JSON.stringify(updatedUser));
 
     loadReservations();
     window.dispatchEvent(new Event('storage'));
-}
-
-function setupLoginLogout() {
-    try {
-        const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
-        const loginLink = document.getElementById('login-logout-link');
-        
-        if (!loginLink) return;
-        
-        if (loggedInUser) {
-            loginLink.textContent = 'Logout';
-            loginLink.href = 'login.html';
-            loginLink.onclick = function(e) {
-                e.preventDefault();
-                localStorage.removeItem('loggedInUser');
-                window.location.href = 'index.html';
-            };
-        } else {
-            loginLink.textContent = 'Login';
-            loginLink.href = 'login.html';
-            loginLink.onclick = null;
-        }
-    } catch (error) {
-        console.error('Error setting up login/logout:', error);
-    }
 }

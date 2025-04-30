@@ -29,6 +29,105 @@ function initSmoothScrolling() {
     });
 }
 
+/**
+ * Validates an email address
+ * @param {string} email - The email to validate
+ * @returns {boolean} True if email is valid
+ */
+function validateEmail(email) {
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return re.test(email);
+}
+
+/**
+ * Displays an error message
+ * @param {string} elementId - The ID of the error element
+ * @param {string} message - The error message to display
+ */
+function showError(elementId, message) {
+    const errorElement = document.getElementById(elementId);
+    if (errorElement) {
+        errorElement.textContent = message;
+        errorElement.style.display = 'block';
+    }
+}
+
+/**
+ * Hides an error message
+ * @param {string} elementId - The ID of the error element
+ */
+function hideError(elementId) {
+    const errorElement = document.getElementById(elementId);
+    if (errorElement) {
+        errorElement.style.display = 'none';
+    }
+}
+
+/**
+ * Checks if a user is banned and redirects if necessary
+ * @returns {boolean} True if user is not banned
+ */
+function checkUserBanStatus() {
+    const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
+    if (loggedInUser) {
+        const users = JSON.parse(localStorage.getItem('users')) || [];
+        const currentUser = users.find(u => u.username === loggedInUser.username);
+        
+        if (currentUser?.banned) {
+            localStorage.removeItem('loggedInUser');
+            window.location.href = 'login.html?banned=true';
+            return false;
+        }
+    }
+    return true;
+}
+
+/* ======================
+   AUTHENTICATION FUNCTIONS
+   ====================== */
+
+/**
+ * Registers a new user
+ * @param {string} fullname - User's full name
+ * @param {string} username - User's username
+ * @param {string} email - User's email
+ * @param {string} phone - User's phone number
+ * @param {string} password - User's password
+ * @param {string} [gender=''] - User's gender (optional)
+ * @param {string} [address=''] - User's address (optional)
+ * @returns {boolean} True if registration was successful
+ */
+function registerUser(fullname, username, email, phone, password, gender = '', address = '') {
+    const users = JSON.parse(localStorage.getItem('users')) || [];
+    
+    if (users.some(user => user.username === username)) {
+        alert('Username already exists');
+        return false;
+    }
+    
+    if (users.some(user => user.email === email)) {
+        alert('Email already registered');
+        return false;
+    }
+    
+    const newUser = {
+        fullname,
+        username,
+        email,
+        phone,
+        password,
+        gender,
+        address,
+        profilePicture: '',
+        reservations: [],
+        cart: []
+    };
+    
+    users.push(newUser);
+    localStorage.setItem('users', JSON.stringify(users));
+    return true;
+}
+
 /* ======================
    CART & RESERVATION FUNCTIONS
    ====================== */
@@ -383,32 +482,10 @@ function initQuickView() {
         window.location.href = 'cart.html';
     });
 }
-/* ======================
-   INITIALIZATION
-   ====================== */
 
-/**
- * Initializes all functionality when the DOM is loaded
- */
-document.addEventListener('DOMContentLoaded', function() {
-    try {
-        // Initialize general utilities
-        initSmoothScrolling();
-        initQuickView();
-        
-        // Initialize cart and reservation functionality
-        setupLoginLogout();
-        
-        // Initialize countdown timer if it exists
-        initCountdownTimer();
-    } catch (error) {
-        console.error('Error initializing application:', error);
-    }
-});
-// Add this to index.html or include it in your script.js
-document.addEventListener('DOMContentLoaded', function() {
-    loadFlashSale();
-});
+/* ======================
+   FLASH SALE FUNCTIONS
+   ====================== */
 
 function loadFlashSale() {
     const flashSales = JSON.parse(localStorage.getItem('flashSales')) || [];
@@ -461,9 +538,159 @@ function loadFlashSale() {
     container.style.display = 'block';
 }
 
-// Listen for flash sale updates from admin
-window.addEventListener('storage', function(e) {
-    if (e.key === 'flashSales') {
+/* ======================
+   REVIEW FUNCTIONS
+   ====================== */
+
+// Global scope for stars and rating
+let selectedRating = 0;
+let stars = [];
+
+/**
+ * Loads and displays all shop reviews
+ */
+function loadReviews() {
+    const reviews = JSON.parse(localStorage.getItem('shopReviews')) || [];
+    const container = document.getElementById('reviews-container');
+    container.innerHTML = '';
+
+    if (reviews.length === 0) {
+        container.innerHTML = '<p class="empty-message">No reviews yet. Be the first to review!</p>';
+        return;
+    }
+
+    reviews.forEach(review => {
+        const reviewElement = document.createElement('div');
+        reviewElement.className = 'review-item';
+        reviewElement.innerHTML = `
+            <div class="review-header">
+                <img src="${review.profilePicture || 'assets/default-profile.png'}" alt="${review.username}" class="reviewer-avatar">
+                <div>
+                    <div class="reviewer-name">${review.username}</div>
+                    <div class="review-date">${new Date(review.date).toLocaleDateString()}</div>
+                </div>
+            </div>
+            <div class="review-rating">
+                ${'★'.repeat(review.rating)}${'☆'.repeat(5 - review.rating)}
+            </div>
+            <div class="review-text">${review.comment}</div>
+        `;
+        container.appendChild(reviewElement);
+    });
+}
+
+/**
+ * Submits a new review
+ */
+function submitReview() {
+    const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
+    if (!loggedInUser) {
+        alert('Please login to submit a review');
+        return;
+    }
+
+    const comment = document.getElementById('review-comment').value.trim();
+    const rating = selectedRating;
+
+    if (rating === 0) {
+        alert('Please select a rating');
+        return;
+    }
+
+    if (comment === '') {
+        alert('Please enter your review comment');
+        return;
+    }
+
+    const reviews = JSON.parse(localStorage.getItem('shopReviews')) || [];
+
+    reviews.push({
+        username: loggedInUser.username,
+        profilePicture: loggedInUser.profilePicture,
+        rating,
+        comment,
+        date: new Date().toISOString()
+    });
+
+    localStorage.setItem('shopReviews', JSON.stringify(reviews));
+
+    // Reset form
+    document.getElementById('review-comment').value = '';
+    stars.forEach(star => {
+        star.classList.remove('fas');
+        star.classList.add('far');
+    });
+    document.querySelector('.rating-text').textContent = '0/5';
+    selectedRating = 0;
+
+    // Reload reviews
+    loadReviews();
+    alert('Thank you for your review!');
+}
+
+/**
+ * Initializes review functionality
+ */
+function initReviews() {
+    // Load reviews
+    loadReviews();
+
+    // Handle review submission
+    stars = document.querySelectorAll('.stars i');
+
+    stars.forEach(star => {
+        star.addEventListener('click', function() {
+            selectedRating = parseInt(this.getAttribute('data-rating'));
+            stars.forEach((s, index) => {
+                if (index < selectedRating) {
+                    s.classList.remove('far');
+                    s.classList.add('fas');
+                } else {
+                    s.classList.remove('fas');
+                    s.classList.add('far');
+                }
+            });
+            document.querySelector('.rating-text').textContent = `${selectedRating}/5`;
+        });
+    });
+
+    document.getElementById('submit-review').addEventListener('click', submitReview);
+}
+
+/* ======================
+   INITIALIZATION
+   ====================== */
+
+/**
+ * Initializes all functionality when the DOM is loaded
+ */
+document.addEventListener('DOMContentLoaded', function() {
+    try {
+        // Check ban status first
+        if (!checkUserBanStatus()) return;
+        
+        // Initialize general utilities
+        initSmoothScrolling();
+        initQuickView();
+        
+        // Initialize cart and reservation functionality
+        setupLoginLogout();
+        
+        // Load flash sale
         loadFlashSale();
+        
+        // Initialize reviews if on a page with reviews
+        if (document.getElementById('reviews-container')) {
+            initReviews();
+        }
+        
+        // Listen for flash sale updates from admin
+        window.addEventListener('storage', function(e) {
+            if (e.key === 'flashSales') {
+                loadFlashSale();
+            }
+        });
+    } catch (error) {
+        console.error('Error initializing application:', error);
     }
 });
