@@ -11,55 +11,165 @@ document.addEventListener('DOMContentLoaded', function() {
         category = 'Shoes';
     } else if (path.includes('shorts.html')) {
         category = 'Shorts';
+    } else if (path.includes('index.html')) {
+        // For main shop page, we'll handle featured products separately
+        category = null;
     }
+    
+    // Initialize default products if none exist
+    initializeDefaultProducts();
     
     // Load products with optional category filter
     loadProducts(category);
     updateCartCount();
+    setupLoginLogout();
     displayActiveFlashSales();
+    setupLoginLogout();
     
-    // Listen for changes in cart
+    // Listen for changes in products data
     window.addEventListener('storage', function(e) {
-        if (e.key === 'cartUpdate') {
-            updateCartCount();
+        if (e.key === 'products' || e.key === 'flashSales') {
+            loadProducts(category);
+            displayActiveFlashSales();
         }
     });
 });
 
-async function loadProducts(category = null) {
+function loadProducts(category = null) {
     const productGrid = document.getElementById('product-grid');
     if (!productGrid) return;
     
-    // Show loading state
-    productGrid.innerHTML = '<div class="loading">Loading products...</div>';
-    
     try {
-        let url = 'products.php?action=';
-        if (category) {
-            url += `getByCategory&category=${encodeURIComponent(category)}`;
-        } else if (window.location.pathname.includes('index.php')) {
-            url += 'getFeatured';
-        } else {
-            url += 'getAll';
+        let products = JSON.parse(localStorage.getItem('products')) || [];
+        
+        // Filter out deleted products
+        products = products.filter(product => !product.deleted);
+        
+        // Filter by category if specified (not on main shop page)
+        if (category && !window.location.pathname.includes('index.html')) {
+            products = products.filter(product => product.category === category);
+        } else if (window.location.pathname.includes('index.html')) {
+            // For main shop page, show featured products only
+            products = products.filter(product => product.featured);
         }
         
-        const response = await fetch(url);
-        if (!response.ok) throw new Error('Failed to load products');
-        
-        const data = await response.json();
-        if (!data.success) throw new Error(data.error || 'Failed to load products');
-        
-        const products = data.products || [];
+        // Apply any active discounts
+        products = applyDiscounts(products);
         
         if (products.length === 0) {
-            productGrid.innerHTML = '<div class="empty">No products available in this category</div>';
+            productGrid.innerHTML = `<div class="empty">No products available in this category</div>`;
             return;
         }
         
         renderProducts(products);
     } catch (error) {
         console.error('Error loading products:', error);
-        productGrid.innerHTML = '<div class="empty">Error loading products. Please try again.</div>';
+        productGrid.innerHTML = `<div class="empty">Error loading products. Please try again.</div>`;
+    }
+}
+// Add this function if it doesn't exist
+function initializeDefaultProducts() {
+    try {
+        let products = JSON.parse(localStorage.getItem('products'));
+        
+        // If no products exist or it's not an array, create default products
+        if (!products || !Array.isArray(products)) {
+            products = [
+                {
+                    id: 'prod1',
+                    name: 'Classic White T-Shirt',
+                    price: 299.99,
+                    category: 'T-Shirts',
+                    image: 'assets/Shirt.png',
+                    sizes: { 'S': 10, 'M': 15, 'L': 8, 'XL': 5 },
+                    description: 'A comfortable classic white t-shirt',
+                    featured: true,
+                    deleted: false
+                },
+                {
+                    id: 'prod2',
+                    name: 'Slim Fit Jeans',
+                    price: 799.99,
+                    category: 'Jeans',
+                    image: 'assets/jeans.svg',
+                    sizes: { '28': 5, '30': 8, '32': 10, '34': 7 },
+                    description: 'Modern slim fit jeans',
+                    featured: true,
+                    deleted: false
+                },
+                // Add more default products as needed
+            ];
+            
+            localStorage.setItem('products', JSON.stringify(products));
+        }
+    } catch (error) {
+        console.error('Error initializing default products:', error);
+    }
+}
+function applyDiscounts(products) {
+    try {
+        const flashSales = JSON.parse(localStorage.getItem('flashSales')) || [];
+        const now = new Date();
+        
+        // Get active flash sales
+        const activeFlashSales = flashSales.filter(sale => {
+            const start = new Date(sale.startTime);
+            const end = new Date(sale.endTime);
+            return now >= start && now <= end;
+        });
+
+        // If no active flash sales, return original products
+        if (activeFlashSales.length === 0) return products;
+
+        return products.map(product => {
+            let bestDiscount = 0;
+            let discountType = '';
+            let discountText = '';
+            
+            // Check all active flash sales for this product
+            activeFlashSales.forEach(sale => {
+                let isIncluded = false;
+                
+                if (sale.scope === 'products' && sale.products) {
+                    isIncluded = sale.products.includes(product.id);
+                } else if (sale.scope === 'categories' && sale.categories) {
+                    isIncluded = sale.categories.includes(product.category);
+                } else if (sale.scope === 'all') {
+                    isIncluded = true;
+                }
+                
+                if (isIncluded) {
+                    const discountValue = sale.discountValue;
+                    if (discountValue > bestDiscount) {
+                        bestDiscount = discountValue;
+                        discountType = sale.discountType;
+                        discountText = sale.name || 'FLASH SALE';
+                    }
+                }
+            });
+            
+            // Apply the best discount found
+            if (bestDiscount > 0) {
+                const discountedProduct = {...product};
+                discountedProduct.originalPrice = product.price;
+                
+                if (discountType === 'percentage') {
+                    discountedProduct.price = product.price * (1 - (bestDiscount / 100));
+                    discountedProduct.discountText = discountText;
+                } else {
+                    discountedProduct.price = Math.max(0, product.price - bestDiscount);
+                    discountedProduct.discountText = discountText;
+                }
+                
+                discountedProduct.discountSource = 'flashsale';
+                return discountedProduct;
+            }
+            
+            return product;
+        });
+    } catch (error) {
+        console.error('Error applying discounts:', error);
+        return products;
     }
 }
 
@@ -70,19 +180,19 @@ function renderProducts(products) {
     productGrid.innerHTML = '';
     
     products.forEach((product, index) => {
-        const sizes = product.sizes ? product.sizes.filter(size => size.quantity > 0).map(size => size.size) : [];
+        const sizes = product.sizes ? Object.keys(product.sizes).filter(size => product.sizes[size] > 0) : [];
         const totalQuantity = product.sizes ? 
-            product.sizes.reduce((sum, size) => sum + (size.quantity || 0), 0) : 0;
+            Object.values(product.sizes).reduce((sum, qty) => sum + (qty || 0), 0) : 0;
         
         // Build price display with proper discount information
         let priceDisplay = '';
-        if (product.original_price) {
-            const discountPercentage = Math.round((1 - (product.price / product.original_price)) * 100);
+        if (product.originalPrice) {
+            const discountPercentage = Math.round((1 - (product.price / product.originalPrice)) * 100);
             priceDisplay = `
-                <p class="original-price">₱${product.original_price.toFixed(2)}</p>
+                <p class="original-price">₱${product.originalPrice.toFixed(2)}</p>
                 <p class="price discounted">₱${product.price.toFixed(2)} 
-                    <span class="discount-badge ${product.discount ? 'flashsale' : ''}">
-                        ${product.discount ? `${discountPercentage}% OFF` : ''}
+                    <span class="discount-badge ${product.discountSource === 'flashsale' ? 'flashsale' : ''}">
+                        ${product.discountText || `${discountPercentage}% OFF`}
                     </span>
                 </p>
             `;
@@ -99,7 +209,7 @@ function renderProducts(products) {
                      class="product-image"
                      onerror="this.onerror=null;this.src='assets/default-product.jpg'">
                 ${product.featured ? '<span class="featured-badge">Featured</span>' : ''}
-                ${product.original_price ? '<span class="discount-flag">SALE</span>' : ''}
+                ${product.originalPrice ? '<span class="discount-flag">SALE</span>' : ''}
                 <button class="quick-view-btn" data-id="${product.id}">
                     <i class="fas fa-eye"></i> Quick View
                 </button>
@@ -143,41 +253,83 @@ function renderProducts(products) {
         });
     });
 }
-
-async function addToCart(productId, size) {
+function addToCart(productId, size) {
     try {
-        // Check if user is logged in
-        const response = await fetch('auth.php?action=check');
-        if (!response.ok) throw new Error('Failed to check auth status');
-        
-        const data = await response.json();
-        if (!data.logged_in) {
+        const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
+        if (!loggedInUser) {
             const confirmLogin = confirm('You need to login to add items to cart. Would you like to login now?');
             if (confirmLogin) {
-                window.location.href = 'login.php';
+                window.location.href = 'login.html';
             }
             return;
         }
         
-        // Make API call to add to cart
-        const addResponse = await fetch('cart.php?action=add', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                product_id: productId,
-                size: size,
-                quantity: 1
-            })
-        });
+        const products = JSON.parse(localStorage.getItem('products')) || [];
+        const product = products.find(p => p.id === productId);
         
-        if (!addResponse.ok) throw new Error('Failed to add to cart');
+        if (!product) {
+            alert('Product not found');
+            return;
+        }
         
-        const addData = await addResponse.json();
-        if (!addData.success) throw new Error(addData.error || 'Failed to add to cart');
+        // Check if size is available
+        if (!product.sizes || !product.sizes[size] || product.sizes[size] <= 0) {
+            alert('Selected size is out of stock');
+            return;
+        }
+        
+        // Get or initialize user's cart
+        const users = JSON.parse(localStorage.getItem('users')) || [];
+        const userIndex = users.findIndex(u => u.username === loggedInUser.username);
+        
+        if (userIndex === -1) return;
+        
+        if (!users[userIndex].cart) {
+            users[userIndex].cart = [];
+        }
+        
+        // Check if product already in cart
+        const existingItemIndex = users[userIndex].cart.findIndex(
+            item => item.productId === productId && item.size === size && (!item.status || item.status === 'pending')
+        );
+        
+        if (existingItemIndex !== -1) {
+            // Check if we have enough stock
+            if (product.sizes[size] <= users[userIndex].cart[existingItemIndex].quantity) {
+                alert(`Only ${product.sizes[size]} items left in stock for this size!`);
+                return;
+            }
+            
+            users[userIndex].cart[existingItemIndex].quantity += 1;
+        } else {
+            // Add new item to cart
+            users[userIndex].cart.push({
+                productId,
+                name: product.name,
+                price: product.price,
+                image: product.image || 'assets/default-product.jpg',
+                size,
+                quantity: 1,
+                status: 'pending',
+                reservedAt: new Date().toISOString()
+            });
+        }
+        
+        // Update product stock
+        const productIndex = products.findIndex(p => p.id === productId);
+        if (productIndex !== -1 && products[productIndex].sizes) {
+            products[productIndex].sizes[size] -= 1;
+            localStorage.setItem('products', JSON.stringify(products));
+        }
+        
+        localStorage.setItem('users', JSON.stringify(users));
+        
+        // Update loggedInUser data
+        const updatedUser = users[userIndex];
+        localStorage.setItem('loggedInUser', JSON.stringify(updatedUser));
         
         updateCartCount();
+        loadProducts(); // Refresh product display
         
         // Show success feedback
         const button = document.querySelector(`.add-to-cart[data-id="${productId}"]`);
@@ -192,35 +344,70 @@ async function addToCart(productId, size) {
         }
     } catch (error) {
         console.error('Error adding to cart:', error);
-        alert(error.message || 'An error occurred while adding to cart');
+        alert('An error occurred while adding to cart');
     }
 }
 
-async function updateCartCount() {
+function updateCartCount() {
     try {
-        const response = await fetch('cart.php?action=count');
-        if (!response.ok) throw new Error('Failed to get cart count');
+        const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
+        if (!loggedInUser) return;
         
-        const data = await response.json();
-        const cartCountElements = document.querySelectorAll('#cart-count');
+        const users = JSON.parse(localStorage.getItem('users')) || [];
+        const user = users.find(u => u.username === loggedInUser.username);
         
-        cartCountElements.forEach(element => {
-            element.textContent = data.count || 0;
-        });
+        if (user && user.cart) {
+            const totalItems = user.cart.filter(item => !item.status || item.status === 'pending')
+                                      .reduce((sum, item) => sum + item.quantity, 0);
+            const cartCountElements = document.querySelectorAll('#cart-count');
+            cartCountElements.forEach(element => {
+                element.textContent = totalItems;
+            });
+        }
     } catch (error) {
         console.error('Error updating cart count:', error);
     }
 }
 
-async function displayActiveFlashSales() {
+function setupLoginLogout() {
     try {
-        const response = await fetch('flash_sales.php?action=getActive');
-        if (!response.ok) throw new Error('Failed to load flash sales');
+        const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
+        const loginLink = document.getElementById('login-logout-link');
         
-        const data = await response.json();
-        if (!data.success) throw new Error(data.error || 'Failed to load flash sales');
+        if (!loginLink) return;
         
-        const activeSales = data.sales || [];
+        if (loggedInUser) {
+            loginLink.textContent = 'Logout';
+            loginLink.href = 'login.html';
+            loginLink.onclick = function(e) {
+                e.preventDefault();
+                localStorage.removeItem('loggedInUser');
+                window.location.href = 'index.html';
+            };
+        } else {
+            loginLink.textContent = 'Login';
+            loginLink.href = 'login.html';
+            loginLink.onclick = null;
+        }
+    } catch (error) {
+        console.error('Error setting up login/logout:', error);
+    }
+}
+
+
+
+function displayActiveFlashSales() {
+    try {
+        const flashSales = JSON.parse(localStorage.getItem('flashSales')) || [];
+        const now = new Date();
+        
+        // Filter active flash sales
+        const activeSales = flashSales.filter(sale => {
+            const start = new Date(sale.startTime);
+            const end = new Date(sale.endTime);
+            return now >= start && now <= end;
+        });
+        
         const flashSaleContainer = document.getElementById('flash-sale-container');
         if (!flashSaleContainer) return;
         
@@ -237,12 +424,15 @@ async function displayActiveFlashSales() {
         // For each active sale, create a banner
         let html = '';
         activeSales.forEach(sale => {
+            const endDate = new Date(sale.endTime);
+            const timeLeft = endDate - now;
+            
             html += `
-                <div class="flash-sale-active" data-end="${sale.end_time}">
+                <div class="flash-sale-active" data-end="${sale.endTime}">
                     <h1>${sale.name}</h1>
-                    <h2>${sale.discount_type === 'percentage' ? 
-                        `${sale.discount_value}% OFF` : 
-                        `₱${sale.discount_value} OFF`}</h2>
+                    <h2>${sale.discountType === 'percentage' ? 
+                        `${sale.discountValue}% OFF` : 
+                        `₱${sale.discountValue} OFF`}</h2>
                     <div class="discount">Limited Time Offer!</div>
                     <div class="time-left">Ends in:</div>
                     <div class="countdown-timer">
@@ -307,82 +497,4 @@ function initializeCountdownTimers() {
         updateTimer();
         const timer = setInterval(updateTimer, 1000);
     });
-}
-
-async function openQuickView(productId) {
-    try {
-        const response = await fetch(`products.php?action=getById&id=${productId}`);
-        if (!response.ok) throw new Error('Failed to load product');
-        
-        const data = await response.json();
-        if (!data.success || !data.product) throw new Error('Product not found');
-        
-        const product = data.product;
-        
-        // Show quick view modal with product details
-        document.getElementById('modalProductTitle').textContent = product.name;
-        document.getElementById('modalProductImage').src = product.image || 'assets/default-product.jpg';
-        document.getElementById('modalProductDescription').textContent = product.description || 'No description available';
-        
-        // Display price with sale info if applicable
-        const priceElement = document.getElementById('modalProductPrice');
-        if (product.original_price) {
-            priceElement.innerHTML = `
-                <span class="original-price">₱${product.original_price.toFixed(2)}</span>
-                <span class="discounted-price">₱${product.price.toFixed(2)}</span>
-            `;
-            document.getElementById('quickViewSaleBadge').style.display = 'block';
-            document.getElementById('quickViewSaleBadge').textContent = product.discount_text || 'Sale';
-        } else {
-            priceElement.textContent = `₱${product.price.toFixed(2)}`;
-            document.getElementById('quickViewSaleBadge').style.display = 'none';
-        }
-        
-        // Populate size options
-        const sizesContainer = document.getElementById('quickViewSizes');
-        sizesContainer.innerHTML = '';
-        
-        if (product.sizes && product.sizes.length > 0) {
-            product.sizes.forEach(size => {
-                if (size.quantity > 0) {
-                    const sizeOption = document.createElement('div');
-                    sizeOption.className = 'size-option';
-                    sizeOption.textContent = size.size;
-                    sizeOption.setAttribute('data-size', size.size);
-                    sizeOption.addEventListener('click', function() {
-                        document.querySelectorAll('#quickViewSizes .size-option').forEach(opt => {
-                            opt.classList.remove('selected');
-                        });
-                        this.classList.add('selected');
-                        selectedQuickViewSize = size.size;
-                    });
-                    
-                    // Select first available size by default
-                    if (selectedQuickViewSize === '' && size.quantity > 0) {
-                        sizeOption.classList.add('selected');
-                        selectedQuickViewSize = size.size;
-                    }
-                    
-                    sizesContainer.appendChild(sizeOption);
-                }
-            });
-            
-            if (sizesContainer.children.length === 0) {
-                sizesContainer.innerHTML = '<p class="empty-message">No sizes available</p>';
-            }
-        } else {
-            sizesContainer.innerHTML = '<p class="empty-message">No size information</p>';
-        }
-        
-        // Set product ID on buttons
-        document.getElementById('addToCartBtn').setAttribute('data-id', productId);
-        document.getElementById('reserveInModal').setAttribute('data-id', productId);
-        
-        // Show modal
-        document.getElementById('productModal').style.display = 'block';
-        document.body.style.overflow = 'hidden';
-    } catch (error) {
-        console.error('Error loading product for quick view:', error);
-        alert('An error occurred while loading the product details');
-    }
 }

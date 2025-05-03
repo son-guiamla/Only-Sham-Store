@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Check if admin is logged in
         const loggedInAdmin = JSON.parse(localStorage.getItem('loggedInAdmin'));
         if (!loggedInAdmin) {
-            window.location.href = 'login.php';
+            window.location.href = 'login.html';
             return;
         }
 
@@ -59,7 +59,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (logoutBtn) {
             logoutBtn.addEventListener('click', function() {
                 localStorage.removeItem('loggedInAdmin');
-                window.location.href = 'logout.php';
+                window.location.href = 'login.html';
             });
         }
 
@@ -165,59 +165,44 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Dashboard functions
-async function loadDashboardData() {
+function loadDashboardData() {
     try {
-        // Fetch data from server
-        const [productsRes, usersRes] = await Promise.all([
-            fetch('products.php?action=getAll'),
-            fetch('users.php?action=getAll')
-        ]);
-
-        if (!productsRes.ok || !usersRes.ok) {
-            throw new Error('Failed to fetch dashboard data');
-        }
-
-        const products = await productsRes.json();
-        const users = await usersRes.json();
-
-        if (!products.success || !users.success) {
-            throw new Error('Failed to parse dashboard data');
-        }
-
-        // Update product count
+        // Load products
+        const products = JSON.parse(localStorage.getItem('products')) || [];
         const totalProductsEl = document.getElementById('total-products');
         if (totalProductsEl) {
-            totalProductsEl.textContent = products.data.length;
+            totalProductsEl.textContent = products.filter(p => !p.deleted).length;
         }
         
-        // Update user count
+        // Load users
+        const users = JSON.parse(localStorage.getItem('users')) || [];
         const totalUsersEl = document.getElementById('total-users');
         if (totalUsersEl) {
-            totalUsersEl.textContent = users.data.length;
+            totalUsersEl.textContent = users.length;
         }
         
-        // Fetch reservations data
-        const reservationsRes = await fetch('reservations.php?action=getAll');
-        if (!reservationsRes.ok) {
-            throw new Error('Failed to fetch reservations');
-        }
-        
-        const reservations = await reservationsRes.json();
-        if (!reservations.success) {
-            throw new Error('Failed to parse reservations');
-        }
-
+        // Load reservations and calculate revenue
         let activeReservations = 0;
         let totalRevenue = 0;
         let pickedItemsCount = 0;
-
-        reservations.data.forEach(reservation => {
-            if (reservation.status === 'confirmed') {
-                activeReservations++;
-                totalRevenue += reservation.total_amount;
-            } else if (reservation.status === 'completed') {
-                pickedItemsCount++;
-                totalRevenue += reservation.total_amount;
+        
+        users.forEach(user => {
+            // Count picked items
+            if (user.pickedItems) {
+                pickedItemsCount += user.pickedItems.length;
+                user.pickedItems.forEach(item => {
+                    totalRevenue += item.price * item.quantity;
+                });
+            }
+            
+            // Count active reservations
+            if (user.cart) {
+                user.cart.forEach(reservation => {
+                    if (reservation.status === 'reserved' || reservation.status === 'confirmed') {
+                        activeReservations++;
+                        totalRevenue += reservation.price * reservation.quantity;
+                    }
+                });
             }
         });
         
@@ -237,16 +222,16 @@ async function loadDashboardData() {
         }
         
         // Initialize charts
-        initCharts(users.data, reservations.data);
+        initCharts(users);
     } catch (error) {
         console.error('Error loading dashboard data:', error);
     }
 }
 
-function initCharts(users, reservations) {
+function initCharts(users) {
     try {
         // Sales chart
-        const salesData = getSalesData(reservations);
+        const salesData = getSalesData(users);
         const salesCtx = document.getElementById('salesChart')?.getContext('2d');
         
         if (salesCtx) {
@@ -275,14 +260,14 @@ function initCharts(users, reservations) {
         }
         
         // Reservation status chart
-        const statusData = getReservationStatusData(reservations);
+        const statusData = getReservationStatusData(users);
         const statusCtx = document.getElementById('reservationStatusChart')?.getContext('2d');
         
         if (statusCtx) {
             new Chart(statusCtx, {
                 type: 'doughnut',
                 data: {
-                    labels: ['Pending', 'Reserved', 'Confirmed', 'Completed', 'Expired'],
+                    labels: ['Pending', 'Reserved', 'Confirmed', 'Picked', 'Expired'],
                     datasets: [{
                         data: statusData,
                         backgroundColor: [
@@ -313,49 +298,79 @@ function initCharts(users, reservations) {
     }
 }
 
-function getSalesData(reservations) {
+function getSalesData(users) {
     const monthlySales = Array(12).fill(0);
+    const now = new Date();
+    const currentYear = now.getFullYear();
     
-    reservations.forEach(reservation => {
-        if (reservation.status === 'completed' || reservation.status === 'confirmed') {
-            const date = new Date(reservation.created_at);
-            const month = date.getMonth();
-            monthlySales[month] += reservation.total_amount;
+    users.forEach(user => {
+        // Process picked items (completed sales)
+        if (user.pickedItems) {
+            user.pickedItems.forEach(item => {
+                if (item.pickedAt) {
+                    const date = new Date(item.pickedAt);
+                    if (date.getFullYear() === currentYear) {
+                        const month = date.getMonth();
+                        monthlySales[month] += item.price * item.quantity;
+                    }
+                }
+            });
+        }
+        
+        // Process confirmed reservations (potential sales)
+        if (user.cart) {
+            user.cart.forEach(item => {
+                if (item.status === 'confirmed' && item.reservedAt) {
+                    const date = new Date(item.reservedAt);
+                    if (date.getFullYear() === currentYear) {
+                        const month = date.getMonth();
+                        monthlySales[month] += item.price * item.quantity;
+                    }
+                }
+            });
         }
     });
     
     return monthlySales;
 }
 
-function getReservationStatusData(reservations) {
+function getReservationStatusData(users) {
     const statusCounts = {
         pending: 0,
         reserved: 0,
         confirmed: 0,
-        completed: 0,
+        picked: 0,
         expired: 0
     };
     
     const now = new Date();
     
-    reservations.forEach(reservation => {
-        if (reservation.status === 'completed') {
-            statusCounts.completed++;
-        } else if (reservation.status === 'confirmed') {
-            statusCounts.confirmed++;
-        } else if (reservation.status === 'reserved') {
-            statusCounts.reserved++;
-        } else if (reservation.status === 'pending') {
-            statusCounts.pending++;
+    users.forEach(user => {
+        // Count picked items
+        if (user.pickedItems) {
+            statusCounts.picked += user.pickedItems.length;
         }
         
-        // Check for expired reservations
-        if (reservation.status === 'reserved' || reservation.status === 'confirmed') {
-            const expiryDate = new Date(reservation.created_at);
-            expiryDate.setDate(expiryDate.getDate() + 3);
-            if (expiryDate < now) {
-                statusCounts.expired++;
-            }
+        // Count cart items
+        if (user.cart) {
+            user.cart.forEach(item => {
+                if (!item.status || item.status === 'pending') {
+                    statusCounts.pending++;
+                } else if (item.status === 'reserved') {
+                    statusCounts.reserved++;
+                } else if (item.status === 'confirmed') {
+                    statusCounts.confirmed++;
+                }
+                
+                // Check for expired reservations
+                if (item.reservedAt && (item.status === 'reserved' || item.status === 'confirmed')) {
+                    const expiryDate = new Date(item.reservedAt);
+                    expiryDate.setDate(expiryDate.getDate() + 3);
+                    if (expiryDate < now) {
+                        statusCounts.expired++;
+                    }
+                }
+            });
         }
     });
     
@@ -363,35 +378,30 @@ function getReservationStatusData(reservations) {
         statusCounts.pending,
         statusCounts.reserved,
         statusCounts.confirmed,
-        statusCounts.completed,
+        statusCounts.picked,
         statusCounts.expired
     ];
 }
 
 // Load feedback data
-async function loadFeedback() {
+function loadFeedback() {
     try {
-        const response = await fetch('reviews.php?action=getAll');
-        if (!response.ok) throw new Error('Failed to fetch feedback');
-        
-        const data = await response.json();
-        if (!data.success) throw new Error(data.error || 'Failed to load feedback');
-        
+        const feedbackList = JSON.parse(localStorage.getItem('shopReviews')) || [];
         const tbody = document.querySelector('#feedback-table tbody');
         if (!tbody) return;
 
         tbody.innerHTML = '';
 
-        data.reviews.forEach((feedback, index) => {
+        feedbackList.forEach((feedback, index) => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${feedback.username}</td>
-                <td><img src="${feedback.profile_picture || 'assets/default-profile.png'}" alt="${feedback.username}" width="50" style="border-radius: 50%;"></td>
+                <td><img src="${feedback.profilePicture || 'assets/default-profile.png'}" alt="${feedback.username}" width="50" style="border-radius: 50%;"></td>
                 <td>${'★'.repeat(feedback.rating)}${'☆'.repeat(5 - feedback.rating)}</td>
                 <td>${feedback.comment}</td>
-                <td>${new Date(feedback.created_at).toLocaleDateString()}</td>
+                <td>${new Date(feedback.date).toLocaleDateString()}</td>
                 <td>
-                    <button class="admin-action-btn admin-delete-btn" data-id="${feedback.id}"><i class="fas fa-trash"></i> <span>Delete</span></button>
+                    <button class="admin-action-btn admin-delete-btn" data-id="${index}"><i class="fas fa-trash"></i> <span>Delete</span></button>
                 </td>
             `;
             tbody.appendChild(tr);
@@ -409,18 +419,12 @@ async function loadFeedback() {
 }
 
 // Delete feedback
-async function deleteFeedback(id) {
+function deleteFeedback(id) {
     if (confirm('Are you sure you want to delete this feedback?')) {
         try {
-            const response = await fetch(`reviews.php?action=delete&id=${id}`, {
-                method: 'DELETE'
-            });
-            
-            if (!response.ok) throw new Error('Failed to delete feedback');
-            
-            const data = await response.json();
-            if (!data.success) throw new Error(data.error || 'Failed to delete feedback');
-            
+            const feedbackList = JSON.parse(localStorage.getItem('shopReviews')) || [];
+            feedbackList.splice(id, 1);
+            localStorage.setItem('shopReviews', JSON.stringify(feedbackList));
             loadFeedback();
         } catch (error) {
             console.error('Error deleting feedback:', error);
@@ -429,24 +433,24 @@ async function deleteFeedback(id) {
 }
 
 // Product management
-async function loadProducts() {
+function loadProducts() {
     try {
-        const response = await fetch('products.php?action=getAll');
-        if (!response.ok) throw new Error('Failed to fetch products');
-        
-        const data = await response.json();
-        if (!data.success) throw new Error(data.error || 'Failed to load products');
-        
+        const products = JSON.parse(localStorage.getItem('products')) || [];
         const tbody = document.querySelector('#products-table tbody');
         if (!tbody) return;
         
         tbody.innerHTML = '';
         
-        data.products.forEach((product) => {
+        products.forEach((product, index) => {
+            // Skip deleted products in display
+            if (product.deleted) return;
+            
             // Format sizes for display
             let sizesDisplay = 'No sizes';
-            if (product.sizes && product.sizes.length > 0) {
-                sizesDisplay = product.sizes.map(size => `${size.size}: ${size.quantity}`).join(', ');
+            if (product.sizes) {
+                sizesDisplay = Object.entries(product.sizes)
+                    .map(([size, qty]) => `${size}: ${qty}`)
+                    .join(', ');
             }
             
             const tr = document.createElement('tr');
@@ -457,8 +461,8 @@ async function loadProducts() {
                 <td>${product.category || 'N/A'}</td>
                 <td>${sizesDisplay}</td>
                 <td>
-                    <button class="admin-action-btn admin-edit-btn" data-id="${product.id}"><i class="fas fa-edit"></i> <span>Edit</span></button>
-                    <button class="admin-action-btn admin-delete-btn" data-id="${product.id}"><i class="fas fa-trash"></i> <span>Delete</span></button>
+                    <button class="admin-action-btn admin-edit-btn" data-id="${index}"><i class="fas fa-edit"></i> <span>Edit</span></button>
+                    <button class="admin-action-btn admin-delete-btn" data-id="${index}"><i class="fas fa-trash"></i> <span>Delete</span></button>
                 </td>
             `;
             tbody.appendChild(tr);
@@ -481,49 +485,46 @@ async function loadProducts() {
     }
 }
 
-async function editProduct(id) {
+function editProduct(id) {
     try {
-        const response = await fetch(`products.php?action=getById&id=${id}`);
-        if (!response.ok) throw new Error('Failed to fetch product');
+        const products = JSON.parse(localStorage.getItem('products')) || [];
+        const product = products[id];
         
-        const data = await response.json();
-        if (!data.success || !data.product) throw new Error(data.error || 'Product not found');
-        
-        const product = data.product;
-        
-        document.getElementById('product-modal-title').textContent = 'Edit Product';
-        document.getElementById('product-id').value = product.id;
-        document.getElementById('product-name').value = product.name;
-        document.getElementById('product-price').value = product.price;
-        document.getElementById('product-category').value = product.category || 'T-Shirts';
-        document.getElementById('product-description').value = product.description || '';
-        document.getElementById('product-featured').checked = product.featured || false;
-        
-        // Display current image
-        const imagePreview = document.getElementById('image-preview');
-        if (product.image && imagePreview) {
-            imagePreview.innerHTML = `<img src="${product.image}" alt="Current Image" style="max-width: 100px; max-height: 100px;">`;
-        } else if (imagePreview) {
-            imagePreview.innerHTML = '';
-        }
-        
-        // Clear existing size inputs
-        const sizeContainer = document.querySelector('.admin-size-quantities');
-        if (sizeContainer) {
-            sizeContainer.innerHTML = '';
+        if (product) {
+            document.getElementById('product-modal-title').textContent = 'Edit Product';
+            document.getElementById('product-id').value = id;
+            document.getElementById('product-name').value = product.name;
+            document.getElementById('product-price').value = product.price;
+            document.getElementById('product-category').value = product.category || 'T-Shirts';
+            document.getElementById('product-description').value = product.description || '';
+            document.getElementById('product-featured').checked = product.featured || false;
             
-            // Add size inputs for each size in the product
-            if (product.sizes && product.sizes.length > 0) {
-                product.sizes.forEach(size => {
-                    addSizeInput(size.size, size.quantity);
-                });
-            } else {
-                // Default to empty if no sizes exist
-                addSizeInput('S', 0);
+            // Display current image
+            const imagePreview = document.getElementById('image-preview');
+            if (product.image && imagePreview) {
+                imagePreview.innerHTML = `<img src="${product.image}" alt="Current Image" style="max-width: 100px; max-height: 100px;">`;
+            } else if (imagePreview) {
+                imagePreview.innerHTML = '';
             }
+            
+            // Clear existing size inputs
+            const sizeContainer = document.querySelector('.admin-size-quantities');
+            if (sizeContainer) {
+                sizeContainer.innerHTML = '';
+                
+                // Add size inputs for each size in the product
+                if (product.sizes) {
+                    for (const [size, quantity] of Object.entries(product.sizes)) {
+                        addSizeInput(size, quantity);
+                    }
+                } else {
+                    // Default to empty if no sizes exist
+                    addSizeInput('S', 0);
+                }
+            }
+            
+            document.getElementById('product-modal').style.display = 'flex';
         }
-        
-        document.getElementById('product-modal').style.display = 'flex';
     } catch (error) {
         console.error('Error editing product:', error);
     }
@@ -558,8 +559,50 @@ function addSizeInput(size = 'S', quantity = 0) {
     });
 }
 
-// Save product data
-async function saveProduct() {
+// Save product data to localStorage
+function saveProductData(id, name, price, imageUrl, description, category, featured, sizeQuantities, products) {
+    try {
+        if (id === '') {
+            // Add new product
+            const newProduct = {
+                id: Date.now().toString(),
+                name,
+                price,
+                image: imageUrl,
+                description,
+                category,
+                featured,
+                sizes: sizeQuantities,
+                deleted: false
+            };
+            products.push(newProduct);
+        } else {
+            // Update existing product
+            products[id] = {
+                ...products[id],
+                name,
+                price,
+                image: imageUrl,
+                description,
+                category,
+                featured,
+                sizes: sizeQuantities
+            };
+        }
+        
+        localStorage.setItem('products', JSON.stringify(products));
+        document.getElementById('product-modal').style.display = 'none';
+        loadProducts();
+        
+        // Dispatch event to notify other pages of product changes
+        window.dispatchEvent(new Event('storage'));
+    } catch (error) {
+        console.error('Error saving product data:', error);
+        alert('An error occurred while saving the product data');
+    }
+}
+
+function saveProduct() {
     try {
         const id = document.getElementById('product-id').value;
         const name = document.getElementById('product-name').value;
@@ -576,7 +619,7 @@ async function saveProduct() {
         }
         
         // Collect size quantities
-        const sizes = [];
+        const sizeQuantities = {};
         const sizeRows = document.querySelectorAll('.admin-size-quantity-row');
         
         if (sizeRows.length === 0) {
@@ -591,56 +634,56 @@ async function saveProduct() {
                 alert('Quantity cannot be negative');
                 return;
             }
-            sizes.push({ size, quantity });
+            sizeQuantities[size] = quantity;
         });
 
-        // Prepare form data
-        const formData = new FormData();
-        formData.append('id', id);
-        formData.append('name', name);
-        formData.append('price', price);
-        formData.append('description', description);
-        formData.append('category', category);
-        formData.append('featured', featured);
-        formData.append('sizes', JSON.stringify(sizes));
+        const products = JSON.parse(localStorage.getItem('products')) || [];
         
+        // Handle image upload
         if (imageInput.files && imageInput.files[0]) {
-            formData.append('image', imageInput.files[0]);
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const imageUrl = e.target.result;
+                saveProductData(id, name, price, imageUrl, description, category, featured, sizeQuantities, products);
+            };
+            reader.onerror = function() {
+                alert('Error reading image file');
+            };
+            reader.readAsDataURL(imageInput.files[0]);
+        } else {
+            // If no new image is uploaded, keep the existing one for edits
+            let imageUrl = '';
+            if (id !== '' && products[id] && products[id].image) {
+                imageUrl = products[id].image;
+            }
+            saveProductData(id, name, price, imageUrl, description, category, featured, sizeQuantities, products);
         }
-
-        const url = id ? 'products.php?action=update' : 'products.php?action=create';
-        
-        const response = await fetch(url, {
-            method: 'POST',
-            body: formData
-        });
-        
-        if (!response.ok) throw new Error('Failed to save product');
-        
-        const data = await response.json();
-        if (!data.success) throw new Error(data.error || 'Failed to save product');
-        
-        document.getElementById('product-modal').style.display = 'none';
-        loadProducts();
     } catch (error) {
         console.error('Error saving product:', error);
         alert('An error occurred while saving the product. Please check the console for details.');
     }
 }
 
-async function deleteProduct(id) {
+function deleteProduct(id) {
     if (confirm('Are you sure you want to delete this product?')) {
         try {
-            const response = await fetch(`products.php?action=delete&id=${id}`, {
-                method: 'DELETE'
+            const products = JSON.parse(localStorage.getItem('products')) || [];
+            // Mark as deleted
+            products[id].deleted = true;
+            
+            // Also remove from any active reservations
+            const users = JSON.parse(localStorage.getItem('users')) || [];
+            users.forEach(user => {
+                if (user.cart) {
+                    user.cart = user.cart.filter(item => item.productId !== products[id].id);
+                }
             });
             
-            if (!response.ok) throw new Error('Failed to delete product');
-            
-            const data = await response.json();
-            if (!data.success) throw new Error(data.error || 'Failed to delete product');
+            localStorage.setItem('products', JSON.stringify(products));
+            localStorage.setItem('users', JSON.stringify(users));
             
             loadProducts();
+            window.dispatchEvent(new Event('storage'));
         } catch (error) {
             console.error('Error deleting product:', error);
         }
@@ -648,78 +691,77 @@ async function deleteProduct(id) {
 }
 
 // Reservation management
-async function loadReservations() {
+function loadReservations() {
     try {
-        const response = await fetch('reservations.php?action=getAll');
-        if (!response.ok) throw new Error('Failed to fetch reservations');
-        
-        const data = await response.json();
-        if (!data.success) throw new Error(data.error || 'Failed to load reservations');
-        
+        const users = JSON.parse(localStorage.getItem('users')) || [];
         const tbody = document.querySelector('#reservations-table tbody');
         if (!tbody) return;
         
         tbody.innerHTML = '';
         
-        data.reservations.forEach((reservation) => {
-            const items = JSON.parse(reservation.items);
-            const statusClass = reservation.status === 'confirmed' ? 'admin-status-confirmed' : 
-                              reservation.status === 'completed' ? 'admin-status-completed' : 'admin-status-reserved';
-            
-            // Check if reservation is expired
-            let isExpired = false;
-            if (reservation.status === 'reserved' || reservation.status === 'confirmed') {
-                const expiryDate = new Date(reservation.created_at);
-                expiryDate.setDate(expiryDate.getDate() + 3);
-                isExpired = expiryDate < new Date();
+        users.forEach(user => {
+            if (user.cart) {
+                user.cart.forEach((reservation, index) => {
+                    // Skip pending items (only show reserved/confirmed)
+                    if (reservation.status === 'pending') return;
+                    
+                    const tr = document.createElement('tr');
+                    const statusClass = reservation.status === 'confirmed' ? 'admin-status-confirmed' : 
+                                      reservation.status === 'picked' ? 'admin-status-completed' : 'admin-status-reserved';
+                    
+                    // Check if reservation is expired
+                    let isExpired = false;
+                    if (reservation.reservedAt && (reservation.status === 'reserved' || reservation.status === 'confirmed')) {
+                        const expiryDate = new Date(reservation.reservedAt);
+                        expiryDate.setDate(expiryDate.getDate() + 3);
+                        isExpired = expiryDate < new Date();
+                    }
+                    
+                    tr.innerHTML = `
+                        <td>${user.username}</td>
+                        <td>${reservation.name}</td>
+                        <td>${reservation.size}</td>
+                        <td>${reservation.quantity}</td>
+                        <td>₱${(reservation.price * reservation.quantity).toFixed(2)}</td>
+                        <td><span class="admin-status ${statusClass} ${isExpired ? 'admin-status-expired' : ''}">
+                            ${isExpired ? 'Expired' : (reservation.status || 'reserved')}
+                        </span></td>
+                        <td>${reservation.pickedAt ? new Date(reservation.pickedAt).toLocaleDateString() : 'N/A'}</td>
+                        <td>
+                            ${reservation.status === 'reserved' && !isExpired ? 
+                                `<button class="admin-action-btn admin-confirm-btn" data-user="${user.username}" data-index="${index}">
+                                    <i class="fas fa-check"></i> <span>Confirm</span>
+                                </button>` : ''}
+                            ${reservation.status !== 'picked' && !isExpired ? 
+                                `<button class="admin-action-btn admin-complete-btn" data-user="${user.username}" data-index="${index}">
+                                    <i class="fas fa-check-circle"></i> <span>Mark as Picked</span>
+                                </button>` : ''}
+                            <button class="admin-action-btn admin-delete-btn" data-user="${user.username}" data-index="${index}">
+                                <i class="fas fa-trash"></i> <span>Delete</span>
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
             }
-            
-            items.forEach((item, index) => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${reservation.username}</td>
-                    <td>${item.name}</td>
-                    <td>${item.size}</td>
-                    <td>${item.quantity}</td>
-                    <td>₱${(item.price * item.quantity).toFixed(2)}</td>
-                    <td><span class="admin-status ${statusClass} ${isExpired ? 'admin-status-expired' : ''}">
-                        ${isExpired ? 'Expired' : reservation.status}
-                    </span></td>
-                    <td>${reservation.status === 'completed' ? new Date(reservation.updated_at).toLocaleDateString() : 'N/A'}</td>
-                    <td>
-                        ${reservation.status === 'reserved' && !isExpired ? 
-                            `<button class="admin-action-btn admin-confirm-btn" data-id="${reservation.id}" data-index="${index}">
-                                <i class="fas fa-check"></i> <span>Confirm</span>
-                            </button>` : ''}
-                        ${reservation.status !== 'completed' && !isExpired ? 
-                            `<button class="admin-action-btn admin-complete-btn" data-id="${reservation.id}" data-index="${index}">
-                                <i class="fas fa-check-circle"></i> <span>Mark as Completed</span>
-                            </button>` : ''}
-                        <button class="admin-action-btn admin-delete-btn" data-id="${reservation.id}">
-                            <i class="fas fa-trash"></i> <span>Delete</span>
-                        </button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
         });
         
         // Add event listeners to buttons
         document.querySelectorAll('.admin-confirm-btn').forEach(btn => {
             btn.addEventListener('click', function() {
-                confirmReservation(this.dataset.id);
+                confirmReservation(this.dataset.user, parseInt(this.dataset.index));
             });
         });
         
         document.querySelectorAll('.admin-complete-btn').forEach(btn => {
             btn.addEventListener('click', function() {
-                completeReservation(this.dataset.id);
+                completeReservation(this.dataset.user, parseInt(this.dataset.index));
             });
         });
         
         document.querySelectorAll('.admin-delete-btn').forEach(btn => {
             btn.addEventListener('click', function() {
-                deleteReservation(this.dataset.id);
+                deleteReservation(this.dataset.user, parseInt(this.dataset.index));
             });
         });
     } catch (error) {
@@ -727,100 +769,147 @@ async function loadReservations() {
     }
 }
 
-async function confirmReservation(id) {
+function confirmReservation(username, reservationIndex) {
     try {
-        const response = await fetch(`reservations.php?action=confirm&id=${id}`, {
-            method: 'PUT'
-        });
+        const users = JSON.parse(localStorage.getItem('users')) || [];
+        const userIndex = users.findIndex(u => u.username === username);
         
-        if (!response.ok) throw new Error('Failed to confirm reservation');
-        
-        const data = await response.json();
-        if (!data.success) throw new Error(data.error || 'Failed to confirm reservation');
-        
-        loadReservations();
+        if (userIndex !== -1 && users[userIndex].cart[reservationIndex]) {
+            users[userIndex].cart[reservationIndex].status = 'confirmed';
+            localStorage.setItem('users', JSON.stringify(users));
+            
+            // Update loggedInUser if it's the current user
+            const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
+            if (loggedInUser && loggedInUser.username === username) {
+                loggedInUser.cart = users[userIndex].cart;
+                localStorage.setItem('loggedInUser', JSON.stringify(loggedInUser));
+            }
+            
+            loadReservations();
+            window.dispatchEvent(new Event('storage'));
+        }
     } catch (error) {
         console.error('Error confirming reservation:', error);
     }
 }
 
-async function completeReservation(id) {
+function completeReservation(username, reservationIndex) {
     try {
-        const response = await fetch(`reservations.php?action=complete&id=${id}`, {
-            method: 'PUT'
-        });
+        const users = JSON.parse(localStorage.getItem('users')) || [];
+        const userIndex = users.findIndex(u => u.username === username);
         
-        if (!response.ok) throw new Error('Failed to complete reservation');
-        
-        const data = await response.json();
-        if (!data.success) throw new Error(data.error || 'Failed to complete reservation');
-        
-        loadReservations();
-        loadOrderHistory();
+        if (userIndex !== -1 && users[userIndex].cart[reservationIndex]) {
+            const reservation = users[userIndex].cart[reservationIndex];
+            
+            // Mark as picked
+            reservation.status = 'picked';
+            reservation.pickedAt = new Date().toISOString();
+            
+            // Move to picked items
+            if (!users[userIndex].pickedItems) {
+                users[userIndex].pickedItems = [];
+            }
+            users[userIndex].pickedItems.push(reservation);
+            
+            // Remove from cart
+            users[userIndex].cart.splice(reservationIndex, 1);
+            
+            localStorage.setItem('users', JSON.stringify(users));
+            
+            // Update loggedInUser if it's the current user
+            const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
+            if (loggedInUser && loggedInUser.username === username) {
+                loggedInUser.cart = users[userIndex].cart;
+                if (!loggedInUser.pickedItems) {
+                    loggedInUser.pickedItems = [];
+                }
+                loggedInUser.pickedItems.push(reservation);
+                localStorage.setItem('loggedInUser', JSON.stringify(loggedInUser));
+            }
+            
+            loadReservations();
+            loadOrderHistory();
+            window.dispatchEvent(new Event('storage'));
+        }
     } catch (error) {
         console.error('Error completing reservation:', error);
     }
 }
 
-async function deleteReservation(id) {
+function deleteReservation(username, reservationIndex) {
     if (!confirm('Are you sure you want to delete this reservation?')) return;
     
     try {
-        const response = await fetch(`reservations.php?action=delete&id=${id}`, {
-            method: 'DELETE'
-        });
+        const users = JSON.parse(localStorage.getItem('users')) || [];
+        const userIndex = users.findIndex(u => u.username === username);
         
-        if (!response.ok) throw new Error('Failed to delete reservation');
-        
-        const data = await response.json();
-        if (!data.success) throw new Error(data.error || 'Failed to delete reservation');
-        
-        loadReservations();
+        if (userIndex !== -1 && users[userIndex].cart[reservationIndex]) {
+            const reservation = users[userIndex].cart[reservationIndex];
+            
+            // Restore product stock if not picked
+            if (reservation.status !== 'picked') {
+                const products = JSON.parse(localStorage.getItem('products')) || [];
+                const productIndex = products.findIndex(p => p.id === reservation.productId);
+                if (productIndex !== -1 && products[productIndex].sizes) {
+                    products[productIndex].sizes[reservation.size] += reservation.quantity;
+                    localStorage.setItem('products', JSON.stringify(products));
+                }
+            }
+            
+            // Remove reservation
+            users[userIndex].cart.splice(reservationIndex, 1);
+            localStorage.setItem('users', JSON.stringify(users));
+            
+            // Update loggedInUser if it's the current user
+            const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
+            if (loggedInUser && loggedInUser.username === username) {
+                loggedInUser.cart = users[userIndex].cart;
+                localStorage.setItem('loggedInUser', JSON.stringify(loggedInUser));
+            }
+            
+            loadReservations();
+            window.dispatchEvent(new Event('storage'));
+        }
     } catch (error) {
         console.error('Error deleting reservation:', error);
     }
 }
 
-async function loadOrderHistory() {
+function loadOrderHistory() {
     try {
-        const response = await fetch('reservations.php?action=getCompleted');
-        if (!response.ok) throw new Error('Failed to fetch order history');
-        
-        const data = await response.json();
-        if (!data.success) throw new Error(data.error || 'Failed to load order history');
-        
+        const users = JSON.parse(localStorage.getItem('users')) || [];
         const tbody = document.querySelector('#orders-table tbody');
         if (!tbody) return;
         
         tbody.innerHTML = '';
         
-        data.reservations.forEach((reservation) => {
-            const items = JSON.parse(reservation.items);
-            
-            items.forEach((item, index) => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${reservation.username}</td>
-                    <td>${item.name}</td>
-                    <td>${item.size}</td>
-                    <td>${item.quantity}</td>
-                    <td>₱${(item.price * item.quantity).toFixed(2)}</td>
-                    <td><span class="admin-status admin-status-completed">Completed</span></td>
-                    <td>${new Date(reservation.updated_at).toLocaleDateString()}</td>
-                    <td>
-                        <button class="admin-action-btn admin-delete-btn" data-id="${reservation.id}" data-index="${index}">
-                            <i class="fas fa-trash"></i> <span>Delete</span>
-                        </button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
+        users.forEach(user => {
+            if (user.pickedItems && user.pickedItems.length > 0) {
+                user.pickedItems.forEach((order, index) => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${user.username}</td>
+                        <td>${order.name}</td>
+                        <td>${order.size}</td>
+                        <td>${order.quantity}</td>
+                        <td>₱${(order.price * order.quantity).toFixed(2)}</td>
+                        <td><span class="admin-status admin-status-completed">Picked Up</span></td>
+                        <td>${order.pickedAt ? new Date(order.pickedAt).toLocaleDateString() : 'N/A'}</td>
+                        <td>
+                            <button class="admin-action-btn admin-delete-btn" data-user="${user.username}" data-index="${index}">
+                                <i class="fas fa-trash"></i> <span>Delete</span>
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
         });
         
         // Add event listeners to delete buttons
         document.querySelectorAll('.admin-delete-btn').forEach(btn => {
             btn.addEventListener('click', function() {
-                deleteOrder(this.dataset.id);
+                deleteOrder(this.dataset.user, parseInt(this.dataset.index));
             });
         });
     } catch (error) {
@@ -828,58 +917,70 @@ async function loadOrderHistory() {
     }
 }
 
-async function deleteOrder(id) {
+function deleteOrder(username, orderIndex) {
     if (!confirm('Are you sure you want to delete this order record?')) return;
     
     try {
-        const response = await fetch(`reservations.php?action=delete&id=${id}`, {
-            method: 'DELETE'
-        });
+        const users = JSON.parse(localStorage.getItem('users')) || [];
+        const userIndex = users.findIndex(u => u.username === username);
         
-        if (!response.ok) throw new Error('Failed to delete order');
-        
-        const data = await response.json();
-        if (!data.success) throw new Error(data.error || 'Failed to delete order');
-        
-        loadOrderHistory();
+        if (userIndex !== -1 && users[userIndex].pickedItems[orderIndex]) {
+            users[userIndex].pickedItems.splice(orderIndex, 1);
+            localStorage.setItem('users', JSON.stringify(users));
+            
+            // Update loggedInUser if it's the current user
+            const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
+            if (loggedInUser && loggedInUser.username === username) {
+                loggedInUser.pickedItems = users[userIndex].pickedItems;
+                localStorage.setItem('loggedInUser', JSON.stringify(loggedInUser));
+            }
+            
+            loadOrderHistory();
+        }
     } catch (error) {
         console.error('Error deleting order:', error);
     }
 }
 
 // User management
-async function loadUsers() {
+function loadUsers() {
     try {
-        const response = await fetch('users.php?action=getAll');
-        if (!response.ok) throw new Error('Failed to fetch users');
-        
-        const data = await response.json();
-        if (!data.success) throw new Error(data.error || 'Failed to load users');
-        
+        const users = JSON.parse(localStorage.getItem('users')) || [];
         const tbody = document.querySelector('#users-table tbody');
         tbody.innerHTML = '';
         
-        data.users.forEach((user) => {
+        users.forEach((user, index) => {
+            const reservationCount = user.cart ? user.cart.filter(item => item.status && item.status !== 'pending').length : 0;
+            const pickedCount = user.pickedItems ? user.pickedItems.length : 0;
+            const expiredCount = user.cart ? user.cart.filter(item => {
+                if (item.reservedAt && (item.status === 'reserved' || item.status === 'confirmed')) {
+                    const expiryDate = new Date(item.reservedAt);
+                    expiryDate.setDate(expiryDate.getDate() + 3);
+                    return expiryDate < new Date();
+                }
+                return false;
+            }).length : 0;
+            
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${user.fullname || 'N/A'}</td>
                 <td>${user.username}</td>
                 <td>${user.email || 'N/A'}</td>
                 <td>${user.phone || 'N/A'}</td>
-                <td>${user.reservation_count || 0}</td>
-                <td>${user.completed_count || 0}</td>
-                <td>${user.expired_count || 0}</td>
+                <td>${reservationCount}</td>
+                <td>${pickedCount}</td>
+                <td>${expiredCount}</td>
                 <td>
                     ${user.banned ? 
                         `<span class="admin-status admin-status-expired">Banned</span>
-                         <small>${user.ban_reason || 'No reason'}</small>` : 
+                         <small>${user.banReason || 'No reason'}</small>` : 
                         '<span class="admin-status admin-status-confirmed">Active</span>'}
                 </td>
                 <td>
-                    <button class="admin-action-btn ${user.banned ? 'admin-confirm-btn' : 'admin-delete-btn'}" data-id="${user.id}" title="${user.banned ? 'Unban' : 'Ban'}">
+                    <button class="admin-action-btn ${user.banned ? 'admin-confirm-btn' : 'admin-delete-btn'}" data-id="${index}" title="${user.banned ? 'Unban' : 'Ban'}">
                         <i class="fas ${user.banned ? 'fa-unlock' : 'fa-ban'}"></i> <span>${user.banned ? 'Unban' : 'Ban'}</span>
                     </button>
-                    <button class="admin-action-btn admin-delete-btn" data-id="${user.id}" title="Delete">
+                    <button class="admin-action-btn admin-delete-btn" data-id="${index}" title="Delete">
                         <i class="fas fa-trash"></i> <span>Delete</span>
                     </button>
                 </td>
@@ -896,11 +997,11 @@ async function loadUsers() {
         document.querySelectorAll('.admin-confirm-btn, .admin-delete-btn').forEach(btn => {
             if (btn.textContent.includes('Ban') || btn.textContent.includes('Unban')) {
                 btn.addEventListener('click', function() {
-                    toggleBanUser(parseInt(this.dataset.id));
+                    toggleBanUser (parseInt(this.dataset.id));
                 });
             } else if (btn.textContent.includes('Delete')) {
                 btn.addEventListener('click', function() {
-                    deleteUser(parseInt(this.dataset.id));
+                    deleteUser (parseInt(this.dataset.id));
                 });
             }
         });
@@ -909,42 +1010,54 @@ async function loadUsers() {
     }
 }
 
-async function toggleBanUser(id) {
+function toggleBanUser (id) {
     const reason = prompt('Enter ban reason (leave empty to unban):');
     if (reason === null) return; // User cancelled
     
     try {
-        const response = await fetch(`users.php?action=toggleBan&id=${id}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ reason })
-        });
-        
-        if (!response.ok) throw new Error('Failed to toggle ban status');
-        
-        const data = await response.json();
-        if (!data.success) throw new Error(data.error || 'Failed to toggle ban status');
-        
-        loadUsers();
+        const users = JSON.parse(localStorage.getItem('users')) || [];
+        if (users[id]) {
+            if (reason === '') {
+                // Unban user
+                users[id].banned = false;
+                delete users[id].banReason;
+            } else {
+                // Ban user
+                users[id].banned = true;
+                users[id].banReason = reason;
+            }
+            
+            localStorage.setItem('users', JSON.stringify(users));
+            
+            // If banning the currently logged in user, log them out
+            const loggedInUser  = JSON.parse(localStorage.getItem('loggedInUser '));
+            if (loggedInUser  && loggedInUser .username === users[id].username) {
+                localStorage.removeItem('loggedInUser ');
+                window.location.href = 'login.html?banned=true';
+                return;
+            }
+            
+            loadUsers();
+        }
     } catch (error) {
         console.error('Error toggling user ban:', error);
     }
 }
 
-async function deleteUser(id) {
+function deleteUser (id) {
     if (confirm('Are you sure you want to permanently delete this user account?')) {
         try {
-            const response = await fetch(`users.php?action=delete&id=${id}`, {
-                method: 'DELETE'
-            });
+            const users = JSON.parse(localStorage.getItem('users')) || [];
+            const userToDelete = users[id];
             
-            if (!response.ok) throw new Error('Failed to delete user');
+            // If deleting the currently logged in user, log them out first
+            const loggedInUser  = JSON.parse(localStorage.getItem('loggedInUser '));
+            if (loggedInUser  && loggedInUser .username === userToDelete.username) {
+                localStorage.removeItem('loggedInUser ');
+            }
             
-            const data = await response.json();
-            if (!data.success) throw new Error(data.error || 'Failed to delete user');
-            
+            users.splice(id, 1);
+            localStorage.setItem('users', JSON.stringify(users));
             loadUsers();
         } catch (error) {
             console.error('Error deleting user:', error);
@@ -953,60 +1066,43 @@ async function deleteUser(id) {
 }
 
 // Flash Sale Functions
-async function loadFlashSaleProductOptions() {
-    try {
-        const response = await fetch('products.php?action=getAll');
-        if (!response.ok) throw new Error('Failed to fetch products');
-        
-        const data = await response.json();
-        if (!data.success) throw new Error(data.error || 'Failed to load products');
-        
-        const container = document.getElementById('products-checkboxes');
-        container.innerHTML = '';
-        
-        data.products.forEach(product => {
-            const div = document.createElement('div');
-            div.className = 'admin-checkbox-item';
-            div.innerHTML = `
-                <input type="checkbox" id="product-${product.id}" value="${product.id}" class="product-checkbox">
-                <label for="product-${product.id}">
-                    <span class="product-name">${product.name}</span>
-                    <span class="product-category">${product.category}</span>
-                </label>
-            `;
-            container.appendChild(div);
-        });
-    } catch (error) {
-        console.error('Error loading product options:', error);
-    }
+function loadFlashSaleProductOptions() {
+    const products = JSON.parse(localStorage.getItem('products')) || [];
+    const container = document.getElementById('products-checkboxes');
+    container.innerHTML = '';
+    
+    products.filter(p => !p.deleted).forEach(product => {
+        const div = document.createElement('div');
+        div.className = 'admin-checkbox-item';
+        div.innerHTML = `
+            <input type="checkbox" id="product-${product.id}" value="${product.id}" class="product-checkbox">
+            <label for="product-${product.id}">
+                <span class="product-name">${product.name}</span>
+                <span class="product-category">${product.category}</span>
+            </label>
+        `;
+        container.appendChild(div);
+    });
 }
 
-async function loadFlashSaleCategoryOptions() {
-    try {
-        const response = await fetch('categories.php?action=getAll');
-        if (!response.ok) throw new Error('Failed to fetch categories');
-        
-        const data = await response.json();
-        if (!data.success) throw new Error(data.error || 'Failed to load categories');
-        
-        const container = document.getElementById('categories-checkboxes');
-        container.innerHTML = '';
-        
-        data.categories.forEach(category => {
-            const div = document.createElement('div');
-            div.className = 'admin-checkbox-item';
-            div.innerHTML = `
-                <input type="checkbox" id="category-${category.id}" value="${category.id}" class="category-checkbox">
-                <label for="category-${category.id}">${category.name}</label>
-            `;
-            container.appendChild(div);
-        });
-    } catch (error) {
-        console.error('Error loading category options:', error);
-    }
+function loadFlashSaleCategoryOptions() {
+    const products = JSON.parse(localStorage.getItem('products')) || [];
+    const categories = [...new Set(products.filter(p => !p.deleted).map(p => p.category))];
+    const container = document.getElementById('categories-checkboxes');
+    container.innerHTML = '';
+    
+    categories.forEach(category => {
+        const div = document.createElement('div');
+        div.className = 'admin-checkbox-item';
+        div.innerHTML = `
+            <input type="checkbox" id="category-${category}" value="${category}" class="category-checkbox">
+            <label for="category-${category}">${category}</label>
+        `;
+        container.appendChild(div);
+    });
 }
 
-async function saveFlashSale() {
+function saveFlashSale() {
     try {
         const id = document.getElementById('flashsale-id').value;
         const name = document.getElementById('flashsale-name').value;
@@ -1037,57 +1133,61 @@ async function saveFlashSale() {
                                 .map(cb => cb.value);
         }
         
-        const flashSaleData = {
-            id: id || null,
-            name,
-            scope,
-            discount_type: discountType,
-            discount_value: discountValue,
-            start_time: startTime,
-            end_time: endTime,
-            [scope === 'products' ? 'product_ids' : 'category_ids']: selectedItems
-        };
-
-        const url = id ? 'flashsales.php?action=update' : 'flashsales.php?action=create';
-        const method = id ? 'PUT' : 'POST';
+        const flashSales = JSON.parse(localStorage.getItem('flashSales')) || [];
         
-        const response = await fetch(url, {
-            method,
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(flashSaleData)
-        });
+        if (id === '') {
+            // Add new flash sale
+            flashSales.push({
+                id: Date.now().toString(),
+                name,
+                scope,
+                [scope === 'products' ? 'products' : 'categories']: selectedItems,
+                discountType,
+                discountValue,
+                startTime,
+                endTime,
+                createdAt: new Date().toISOString()
+            });
+        } else {
+            // Update existing flash sale
+            const index = flashSales.findIndex(fs => fs.id === id);
+            if (index !== -1) {
+                flashSales[index] = {
+                    ...flashSales[index],
+                    name,
+                    scope,
+                    [scope === 'products' ? 'products' : 'categories']: selectedItems,
+                    discountType,
+                    discountValue,
+                    startTime,
+                    endTime
+                };
+            }
+        }
         
-        if (!response.ok) throw new Error('Failed to save flash sale');
-        
-        const data = await response.json();
-        if (!data.success) throw new Error(data.error || 'Failed to save flash sale');
-        
+        localStorage.setItem('flashSales', JSON.stringify(flashSales));
         loadFlashSales();
         document.getElementById('flashsale-modal').style.display = 'none';
+        
+        // Dispatch event to notify other pages of flash sale changes
+        window.dispatchEvent(new Event('storage'));
     } catch (error) {
         console.error('Error saving flash sale:', error);
         alert('An error occurred while saving the flash sale');
     }
 }
 
-async function loadFlashSales() {
+function loadFlashSales() {
     try {
-        const response = await fetch('flashsales.php?action=getAll');
-        if (!response.ok) throw new Error('Failed to fetch flash sales');
-        
-        const data = await response.json();
-        if (!data.success) throw new Error(data.error || 'Failed to load flash sales');
-        
+        const flashSales = JSON.parse(localStorage.getItem('flashSales')) || [];
         const tbody = document.querySelector('#flashsales-table tbody');
         tbody.innerHTML = '';
         
         const now = new Date();
         
-        data.flashSales.forEach((sale) => {
-            const start = new Date(sale.start_time);
-            const end = new Date(sale.end_time);
+        flashSales.forEach((sale, index) => {
+            const start = new Date(sale.startTime);
+            const end = new Date(sale.endTime);
             
             let status = 'Scheduled';
             let statusClass = 'admin-status-pending';
@@ -1121,20 +1221,20 @@ async function loadFlashSales() {
             tr.innerHTML = `
                 <td>${sale.name}</td>
                 <td>${sale.scope === 'products' ? 
-                    `${sale.product_ids.length} products` : 
-                    `${sale.category_ids.length} categories`}</td>
-                <td>${sale.discount_type === 'percentage' ? 
-                    `${sale.discount_value}% off` : 
-                    `₱${sale.discount_value} off`}</td>
-                <td>${new Date(sale.start_time).toLocaleString()}</td>
-                <td>${new Date(sale.end_time).toLocaleString()}</td>
+                    `${sale.products.length} products` : 
+                    `${sale.categories.length} categories`}</td>
+                <td>${sale.discountType === 'percentage' ? 
+                    `${sale.discountValue}% off` : 
+                    `₱${sale.discountValue} off`}</td>
+                <td>${new Date(sale.startTime).toLocaleString()}</td>
+                <td>${new Date(sale.endTime).toLocaleString()}</td>
                 <td>${timeLeft}</td>
                 <td><span class="admin-status ${statusClass}">${status}</span></td>
                 <td>
-                    <button class="admin-action-btn admin-edit-btn" data-id="${sale.id}">
+                    <button class="admin-action-btn admin-edit-btn" data-id="${index}">
                         <i class="fas fa-edit"></i> <span>Edit</span>
                     </button>
-                    <button class="admin-action-btn admin-delete-btn" data-id="${sale.id}">
+                    <button class="admin-action-btn admin-delete-btn" data-id="${index}">
                         <i class="fas fa-trash"></i> <span>Delete</span>
                     </button>
                 </td>
@@ -1159,65 +1259,57 @@ async function loadFlashSales() {
     }
 }
 
-async function editFlashSale(id) {
+function editFlashSale(id) {
     try {
-        const response = await fetch(`flashsales.php?action=getById&id=${id}`);
-        if (!response.ok) throw new Error('Failed to fetch flash sale');
+        const flashSales = JSON.parse(localStorage.getItem('flashSales')) || [];
+        const sale = flashSales[id];
         
-        const data = await response.json();
-        if (!data.success || !data.flashSale) throw new Error(data.error || 'Flash sale not found');
-        
-        const sale = data.flashSale;
-        
-        document.getElementById('flashsale-modal-title').textContent = 'Edit Flash Sale';
-        document.getElementById('flashsale-id').value = sale.id;
-        document.getElementById('flashsale-name').value = sale.name;
-        document.getElementById('flashsale-scope').value = sale.scope;
-        document.getElementById('flashsale-discount-type').value = sale.discount_type;
-        document.getElementById('flashsale-discount-value').value = sale.discount_value;
-        document.getElementById('flashsale-start').value = sale.start_time.slice(0, 16);
-        document.getElementById('flashsale-end').value = sale.end_time.slice(0, 16);
-        
-        // Update UI based on scope
-        document.getElementById('products-selector').style.display = sale.scope === 'products' ? 'block' : 'none';
-        document.getElementById('categories-selector').style.display = sale.scope === 'categories' ? 'block' : 'none';
-        document.getElementById('discount-symbol').textContent = sale.discount_type === 'percentage' ? '%' : '₱';
-        
-        // Load options and check the selected ones
-        await loadFlashSaleProductOptions();
-        await loadFlashSaleCategoryOptions();
-        
-        if (sale.scope === 'products') {
-            sale.product_ids.forEach(productId => {
-                const checkbox = document.getElementById(`product-${productId}`);
-                if (checkbox) checkbox.checked = true;
-            });
-        } else if (sale.scope === 'categories') {
-            sale.category_ids.forEach(categoryId => {
-                const checkbox = document.getElementById(`category-${categoryId}`);
-                if (checkbox) checkbox.checked = true;
-            });
+        if (sale) {
+            document.getElementById('flashsale-modal-title').textContent = 'Edit Flash Sale';
+            document.getElementById('flashsale-id').value = sale.id;
+            document.getElementById('flashsale-name').value = sale.name;
+            document.getElementById('flashsale-scope').value = sale.scope;
+            document.getElementById('flashsale-discount-type').value = sale.discountType;
+            document.getElementById('flashsale-discount-value').value = sale.discountValue;
+            document.getElementById('flashsale-start').value = sale.startTime.slice(0, 16);
+            document.getElementById('flashsale-end').value = sale.endTime.slice(0, 16);
+            
+            // Update UI based on scope
+            document.getElementById('products-selector').style.display = sale.scope === 'products' ? 'block' : 'none';
+            document.getElementById('categories-selector').style.display = sale.scope === 'categories' ? 'block' : 'none';
+            document.getElementById('discount-symbol').textContent = sale.discountType === 'percentage' ? '%' : '₱';
+            
+            // Load options and check the selected ones
+            loadFlashSaleProductOptions();
+            loadFlashSaleCategoryOptions();
+            
+            if (sale.scope === 'products') {
+                sale.products.forEach(productId => {
+                    const checkbox = document.getElementById(`product-${productId}`);
+                    if (checkbox) checkbox.checked = true;
+                });
+            } else if (sale.scope === 'categories') {
+                sale.categories.forEach(category => {
+                    const checkbox = document.getElementById(`category-${category}`);
+                    if (checkbox) checkbox.checked = true;
+                });
+            }
+            
+            document.getElementById('flashsale-modal').style.display = 'flex';
         }
-        
-        document.getElementById('flashsale-modal').style.display = 'flex';
     } catch (error) {
         console.error('Error editing flash sale:', error);
     }
 }
 
-async function deleteFlashSale(id) {
+function deleteFlashSale(id) {
     if (confirm('Are you sure you want to delete this flash sale?')) {
         try {
-            const response = await fetch(`flashsales.php?action=delete&id=${id}`, {
-                method: 'DELETE'
-            });
-            
-            if (!response.ok) throw new Error('Failed to delete flash sale');
-            
-            const data = await response.json();
-            if (!data.success) throw new Error(data.error || 'Failed to delete flash sale');
-            
+            const flashSales = JSON.parse(localStorage.getItem('flashSales')) || [];
+            flashSales.splice(id, 1);
+            localStorage.setItem('flashSales', JSON.stringify(flashSales));
             loadFlashSales();
+            window.dispatchEvent(new Event('storage'));
         } catch (error) {
             console.error('Error deleting flash sale:', error);
         }

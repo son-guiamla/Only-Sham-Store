@@ -41,15 +41,9 @@ function loadReviews() {
     reviews.forEach(review => {
         const reviewElement = document.createElement('div');
         reviewElement.className = 'review-item';
-        
-        // Get user data including profile picture
-        const users = JSON.parse(localStorage.getItem('users')) || [];
-        const user = users.find(u => u.username === review.username);
-        const profilePic = user?.profilePicture || review.profilePicture || 'assets/default-profile.png';
-        
         reviewElement.innerHTML = `
             <div class="review-header">
-                <img src="${profilePic}" alt="${review.username}" class="reviewer-avatar">
+                <img src="${review.profilePicture || 'assets/default-profile.png'}" alt="${review.username}" class="reviewer-avatar">
                 <div>
                     <div class="reviewer-name">${review.username}</div>
                     <div class="review-date">${new Date(review.date).toLocaleDateString()}</div>
@@ -86,14 +80,9 @@ function submitReview() {
 
     const reviews = JSON.parse(localStorage.getItem('shopReviews')) || [];
 
-    // Get user's profile picture from both loggedInUser and users array
-    const users = JSON.parse(localStorage.getItem('users')) || [];
-    const user = users.find(u => u.username === loggedInUser.username);
-    const profilePic = user?.profilePicture || loggedInUser.profilePicture || 'assets/default-profile.png';
-
     reviews.push({
         username: loggedInUser.username,
-        profilePicture: profilePic,
+        profilePicture: loggedInUser.profilePicture,
         rating,
         comment,
         date: new Date().toISOString()
