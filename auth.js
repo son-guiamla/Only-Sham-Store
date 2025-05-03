@@ -1,102 +1,183 @@
-// Toggle sidebar
-function toggleSidebar() {
-    const sidebar = document.getElementById('sidebar');
-    sidebar.style.right = sidebar.style.right === '0px' ? '-250px' : '0px';
-}
+// DOM Elements
+const tabBtns = document.querySelectorAll('.tab-btn');
+const authForms = document.querySelectorAll('.auth-form');
+const authSwitchLinks = document.querySelectorAll('.auth-switch a');
+const loginForm = document.getElementById('loginForm');
+const registerForm = document.getElementById('registerForm');
 
-// Add to signup form validation
-if (!email) {
-    showError('signup-email-error', 'Email is required');
-    isValid = false;
-} else if (!validateEmail(email)) {
-    showError('signup-email-error', 'Please enter a valid email');
-    isValid = false;
-}
-
-// In auth.js signup function
-const address = document.getElementById('signup-address').value.trim();
-// Include in newUser object
-// Update the new user object
-const newUser = {
-    fullname,
-    phone,
-    email,
-    username,
-    password,
-    address,
-    reservations: []
-};
-
-function registerUser(fullname, username, email, phone, password, gender = '') {
-    const users = JSON.parse(localStorage.getItem('users')) || [];
+// Initialize the authentication page
+document.addEventListener('DOMContentLoaded', () => {
+    // Tab switching
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+    });
     
-    if (users.some(user => user.username === username)) {
-        alert('Username already exists');
-        return false;
-    }
+    // Auth form switching
+    authSwitchLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            switchTab(link.parentElement.dataset.tab);
+        });
+    });
     
-    if (users.some(user => user.email === email)) {
-        alert('Email already registered');
-        return false;
-    }
+    // Login form submission
+    loginForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        handleLogin();
+    });
     
-    const newUser = {
-        fullname,
-        username,
-        email,
-        phone,
-        password,
-        gender,
-        profilePicture: '',
-        reservations: []
-    };
-    
-    users.push(newUser);
-    localStorage.setItem('users', JSON.stringify(users));
-    return true;
-}
-// Add this function to auth.js
-function checkUserBanStatus() {
-    const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
-    if (loggedInUser) {
-        const users = JSON.parse(localStorage.getItem('users')) || [];
-        const currentUser = users.find(u => u.username === loggedInUser.username);
-        
-        if (currentUser?.banned) {
-            localStorage.removeItem('loggedInUser');
-            window.location.href = 'login.html?banned=true';
-            return false;
-        }
-    }
-    return true;
-}
-
-// Add this to the top of profile.js, cart.js, and other protected pages
-document.addEventListener('DOMContentLoaded', function() {
-    if (!checkUserBanStatus()) return;
-    // Rest of your existing code
+    // Register form submission
+    registerForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        handleRegister();
+    });
 });
-function setupLoginLogout() {
-    try {
-        const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
-        const loginLink = document.getElementById('login-logout-link');
-        
-        if (!loginLink) return;
-        
-        if (loggedInUser) {
-            loginLink.textContent = 'Logout';
-            loginLink.href = 'login.html';
-            loginLink.onclick = function(e) {
-                e.preventDefault();
-                localStorage.removeItem('loggedInUser');
-                window.location.href = 'index.html';
-            };
+
+// Switch between login and register tabs
+function switchTab(tabName) {
+    // Update tab buttons
+    tabBtns.forEach(btn => {
+        if (btn.dataset.tab === tabName) {
+            btn.classList.add('active');
         } else {
-            loginLink.textContent = 'Login';
-            loginLink.href = 'login.html';
-            loginLink.onclick = null;
+            btn.classList.remove('active');
         }
-    } catch (error) {
-        console.error('Error setting up login/logout:', error);
+    });
+    
+    // Update forms
+    authForms.forEach(form => {
+        if (form.dataset.tab === tabName) {
+            form.classList.add('active');
+        } else {
+            form.classList.remove('active');
+        }
+    });
+}
+
+// Handle login
+function handleLogin() {
+    const username = document.getElementById('loginUsername').value;
+    const password = document.getElementById('loginPassword').value;
+    
+    // Simple validation
+    if (!username || !password) {
+        showAlert('Please fill in all fields', 'error');
+        return;
     }
+    
+    // Show loading state
+    const loginBtn = loginForm.querySelector('button[type="submit"]');
+    const originalBtnText = loginBtn.innerHTML;
+    loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Logging in...';
+    loginBtn.disabled = true;
+    
+    // Send login request
+    fetch('auth.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `action=login&username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('Login successful!', 'success');
+            
+            // Redirect based on user type
+            setTimeout(() => {
+                if (data.is_admin) {
+                    window.location.href = 'admin.html';
+                } else {
+                    window.location.href = 'index.html';
+                }
+            }, 1000);
+        } else {
+            showAlert(data.message || 'Invalid username or password', 'error');
+            loginBtn.innerHTML = originalBtnText;
+            loginBtn.disabled = false;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('An error occurred. Please try again.', 'error');
+        loginBtn.innerHTML = originalBtnText;
+        loginBtn.disabled = false;
+    });
+}
+
+// Handle registration
+function handleRegister() {
+    const fullName = document.getElementById('registerFullName').value;
+    const username = document.getElementById('registerUsername').value;
+    const email = document.getElementById('registerEmail').value;
+    const phone = document.getElementById('registerPhone').value;
+    const address = document.getElementById('registerAddress').value;
+    const password = document.getElementById('registerPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+    
+    // Validation
+    if (!fullName || !username || !email || !password || !confirmPassword) {
+        showAlert('Please fill in all required fields', 'error');
+        return;
+    }
+    
+    if (password !== confirmPassword) {
+        showAlert('Passwords do not match', 'error');
+        return;
+    }
+    
+    // Show loading state
+    const registerBtn = registerForm.querySelector('button[type="submit"]');
+    const originalBtnText = registerBtn.innerHTML;
+    registerBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registering...';
+    registerBtn.disabled = true;
+    
+    // Send registration request
+    fetch('auth.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `action=register&full_name=${encodeURIComponent(fullName)}&username=${encodeURIComponent(username)}&email=${encodeURIComponent(email)}&phone=${encodeURIComponent(phone)}&address=${encodeURIComponent(address)}&password=${encodeURIComponent(password)}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('Registration successful! You can now log in.', 'success');
+            registerForm.reset();
+            switchTab('login');
+        } else {
+            showAlert(data.message || 'Registration failed', 'error');
+        }
+        registerBtn.innerHTML = originalBtnText;
+        registerBtn.disabled = false;
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('An error occurred. Please try again.', 'error');
+        registerBtn.innerHTML = originalBtnText;
+        registerBtn.disabled = false;
+    });
+}
+
+// Show alert message
+function showAlert(message, type) {
+    // Remove any existing alerts
+    const existingAlert = document.querySelector('.alert');
+    if (existingAlert) {
+        existingAlert.remove();
+    }
+    
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${type}`;
+    alert.innerHTML = message;
+    
+    const authCard = document.querySelector('.auth-card');
+    authCard.insertBefore(alert, authCard.firstChild);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        alert.remove();
+    }, 5000);
 }
