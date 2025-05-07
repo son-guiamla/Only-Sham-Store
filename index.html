@@ -3,204 +3,283 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Only@Sham - Clothing Store</title>
-    <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <title>Only@Sham</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+    
 </head>
 <body>
-    <!-- Navigation Header -->
-    <header class="header">
-        <div class="container">
-            <div class="header-content">
-                <div class="logo">
-                    <h1>Only@Sham</h1>
-                </div>
-                
-                <nav class="main-nav">
-                    <ul class="categories">
-                        <li><a href="#" class="active" data-category="all">All Products</a></li>
-                        <li><a href="#" data-category="tshirts">T-Shirts</a></li>
-                        <li><a href="#" data-category="pants">Pants</a></li>
-                        <li><a href="#" data-category="hoodies">Hoodies</a></li>
-                        <li><a href="#" data-category="dresses">Dresses</a></li>
-                    </ul>
-                </nav>
-                
-                <div class="user-actions">
-                    <form class="search-form">
-                        <input type="search" placeholder="Search products...">
-                        <button type="submit"><i class="fas fa-search"></i></button>
-                    </form>
-                    
-                    <div class="action-buttons">
-                        <button class="auth-btn" id="authBtn"><i class="fas fa-user"></i></button>
-                        <button class="cart-btn" id="cartBtn">
-                            <i class="fas fa-shopping-bag"></i>
-                            <span class="cart-count">0</span>
-                        </button>
-                    </div>
-                </div>
+    <nav class="navbar">
+        <!-- Logo -->
+        <div class="logo">
+            <a href="#">Only@Sham</a>
+        </div>
+
+        <!-- Menu Links -->
+        <ul class="nav-links">
+            <li><a href="#hero">Home</a></li>
+            <li><a href="#product-grid">Shop</a></li>
+            <li><a href="cart.html">Reservations</a></li>
+            <li><a href="#about-us">About Us</a></li>
+            <li><a href="#Contact">Contact</a></li>
+        </ul>
+
+        <!-- Search Bar -->
+        <div class="search-bar">
+            <input type="text" placeholder="Search...">
+            <button><i class="fas fa-search"></i></button>
+            <div id="search-results-message" class="search-message"></div>
+        </div>
+
+        <!-- Icons -->
+        <div class="nav-icons">
+            <a href="cart.html" class="cart-icon"><i class="fas fa-shopping-cart"><sup><span id="cart-count">0</span></a></li></i></a>
+            <a href="profile.html" class="profile-icon"><i class="fas fa-user"></i></a>
+            <div class="settings-icon" onclick="toggleSidebar()">
+                <i class="fas fa-ellipsis-v"></i>
             </div>
         </div>
-    </header>
+
+        
+        <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+    <a href="#" class="close-btn" onclick="toggleSidebar()">&times;</a>
+    <a href="login.html" id="login-logout-link">Login</a>
+    <a href="#" class="sidebar-link settings-link">Settings</a>
+    <a href="#" class="sidebar-link help-link">Help</a>
+    
+</div>
+            
+        </div>
+    </nav>
 
     <!-- Hero Section -->
+    <section id="hero">
     <section class="hero">
         <div class="hero-content">
-            <h2>Summer Collection</h2>
-            <p>Discover the latest trends at unbeatable prices</p>
-            <button class="btn btn-primary">Shop Now</button>
+            <h1>Discover the Latest Trends</h1>
+            <p>Upgrade your style with our exclusive collection of trendy products.</p>
+            <a href="#product-grid" class="shop-now-btn">Shop Now</a>
         </div>
     </section>
 
-    <!-- Featured Products -->
-    <section class="featured-products">
-        <div class="container">
-            <div class="section-header">
-                <h2>Featured Products</h2>
-                <button class="btn btn-outline">View All</button>
-            </div>
+    <!-- Featured Products Section -->
+    <div class="product-grid" id="product-grid">
+        <!-- Products will be loaded here by JavaScript -->
+        <div>
             
-            <div class="products-grid" id="featuredProducts">
-                <!-- Featured products will be loaded here via JavaScript -->
-            </div>
-        </div>
-    </section>
-
-    <!-- Main Products -->
-    <section class="main-products">
-        <div class="container">
-            <div class="products-filter">
-                <div class="search-filter">
-                    <i class="fas fa-search"></i>
-                    <input type="text" placeholder="Search products..." id="productSearch">
-                </div>
-                
-                <select id="categoryFilter">
-                    <option value="all">All Categories</option>
-                    <option value="tshirts">T-Shirts</option>
-                    <option value="pants">Pants</option>
-                    <option value="hoodies">Hoodies</option>
-                    <option value="dresses">Dresses</option>
-                </select>
-                
-                <div class="price-filter">
-                    <label for="priceRange">Price Range: ₱<span id="priceValue">0 - 5000</span></label>
-                    <input type="range" id="priceRange" min="0" max="5000" step="100" value="5000">
-                </div>
-            </div>
+        </div>  
             
-            <div class="products-grid" id="mainProducts">
-                <!-- Main products will be loaded here via JavaScript -->
+        </div>
+    </section>
+   
+    <!-- Product Categories Section -->
+<section class="product-categories">
+    <h2>Shop by Category</h2>
+    <div class="category-grid">
+        <!-- T-Shirts -->
+        <div class="category-card">
+            <a href="t-shirts.html">
+                <img src="assets/Shirt.png" alt="T-Shirts" width="60" height="60">
+                <h3>T-Shirts</h3>
+            </a>
+        </div>
+        
+        <!-- Jeans -->
+        <div class="category-card">
+            <a href="jeans.html">
+                <img src="assets/jeans.svg" alt="Jeans" width="60" height="60">
+                <h3>Jeans</h3>
+            </a>
+        </div>
+        
+        <!-- Shoes -->
+        <div class="category-card">
+            <a href="shoes.html">
+                <img src="assets/shoes.png" alt="Shoes" width="60" height="60">
+                <h3>Shoes</h3>
+            </a>
+        </div>
+        
+        <!-- Shorts -->
+        <div class="category-card">
+            <a href="shorts.html">
+                <img src="assets/short.png" alt="Shorts" width="60" height="60">
+                <h3>Shorts</h3>
+            </a>
+        </div>
+    </div>
+</section>
+ <!-- Promotional Banner Section -->
+ <section class="promo-banner">
+    <div class="promo-container">
+        <!-- Banner Image (You can change this) -->
+        <img src="assets/newarrival.jpg" alt="Summer Sale - Up to 70% OFF" class="promo-image">
+        
+        <!-- Badge (Optional) -->
+        <div class="promo-badge">
+            <span>Only@Sham Exclusive</span>
+        </div>
+        
+        <!-- Discount Text -->
+        <div class="promo-discount">
+            <span>UP TO 70% OFF</span>
+        </div>
+        
+        <!-- Event Dates (Optional) -->
+        <div class="promo-dates">
+            <span>JUN 10 – JUL 24, 2025</span>
+        </div>
+        
+        <!-- CTA Button -->
+        <a href="#product-grid" class="promo-button">Shop Now</a>
+    </div>
+</section>
+     <!-- About Us Section -->
+     <section id="about-us" class="about-us">
+        <div class="about-content">
+            <div class="about-text">
+                <h2>About Us</h2>
+                <p class="intro">
+                    Welcome to <strong>E-Shop</strong>, your go-to destination for the latest trends in fashion, electronics, and lifestyle products. We are passionate about delivering high-quality products that inspire and empower our customers.
+                </p>
+                <p class="unique">
+                    What makes us unique is our commitment to sustainability, exceptional customer service, and a curated selection of products that cater to your every need. We believe in making shopping an enjoyable and seamless experience for everyone.
+                </p>
+            </div>
+            <div class="about-image">
+                <img src="assets/about us.jpg" alt="Our Team">
+                <div class="image-overlay"></div>
             </div>
         </div>
     </section>
 
-    <!-- Footer -->
-    <footer class="footer">
-        <div class="container">
-            <div class="footer-content">
-                <div class="footer-info">
-                    <h2>Only@Sham</h2>
-                    <p>Your one-stop shop for trendy clothing</p>
-                </div>
-                
-                <div class="footer-links">
-                    <a href="#">About Us</a>
-                    <a href="#">Contact</a>
-                    <a href="#">Terms & Conditions</a>
-                    <a href="#">Privacy Policy</a>
-                </div>
-                
-                <div class="footer-copyright">
-                    <p>&copy; <span id="currentYear"></span> Only@Sham. All rights reserved.</p>
-                </div>
-            </div>
-        </div>
-    </footer>
 
-    <!-- Auth Modal -->
-    <div class="modal" id="authModal">
-        <div class="modal-content">
-            <span class="close-btn">&times;</span>
-            <div class="auth-tabs">
-                <div class="tab-header">
-                    <h2 class="tab-title active" data-tab="login">Login</h2>
-                    <h2 class="tab-title" data-tab="register">Register</h2>
+  <!-- Product Detail Modal -->
+<div id="productModal" class="modal">
+    <span class="close-modal">&times;</span>
+    <div class="modal-content">
+        <div class="product-detail">
+            <div class="product-detail-images">
+                <img id="modalProductImage" src="" alt="">
+                <div id="quickViewSaleBadge" class="product-badge" style="display: none;">Sale</div>
+            </div>
+            <div class="product-detail-info">
+                <h2 id="modalProductTitle">Product Title</h2>
+                <div class="product-price-large" id="modalProductPrice">₱0.00</div>
+                <p class="product-description" id="modalProductDescription">
+                    Product description will be loaded here.
+                </p>
+                <div class="product-options">
+                    <div class="option-group">
+                        <h4>Size</h4>
+                        <div class="size-options" id="quickViewSizes">
+                            <!-- Size options will be loaded here -->
+                        </div>
+                    </div>
                 </div>
-                
-                <div class="tab-content">
-                    <!-- Login Form -->
-                    <form id="loginForm" class="auth-form active" data-tab="login">
-                        <div class="form-group">
-                            <label for="loginEmail">Email</label>
-                            <div class="input-group">
-                                <i class="fas fa-envelope"></i>
-                                <input type="email" id="loginEmail" placeholder="name@example.com" required>
-                            </div>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="loginPassword">Password</label>
-                            <div class="input-group">
-                                <i class="fas fa-lock"></i>
-                                <input type="password" id="loginPassword" required>
-                            </div>
-                        </div>
-                        
-                        <div class="form-group checkbox-group">
-                            <input type="checkbox" id="adminLogin">
-                            <label for="adminLogin">Login as admin</label>
-                        </div>
-                        
-                        <button type="submit" class="btn btn-primary">Login</button>
-                        
-                        <p class="auth-switch">Don't have an account? <a href="#" data-tab="register">Register</a></p>
-                    </form>
-                    
-                    <!-- Register Form -->
-                    <form id="registerForm" class="auth-form" data-tab="register">
-                        <div class="form-group">
-                            <label for="registerName">Full Name</label>
-                            <div class="input-group">
-                                <i class="fas fa-user"></i>
-                                <input type="text" id="registerName" placeholder="John Doe" required>
-                            </div>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="registerEmail">Email</label>
-                            <div class="input-group">
-                                <i class="fas fa-envelope"></i>
-                                <input type="email" id="registerEmail" placeholder="name@example.com" required>
-                            </div>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="registerPassword">Password</label>
-                            <div class="input-group">
-                                <i class="fas fa-lock"></i>
-                                <input type="password" id="registerPassword" required>
-                            </div>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="confirmPassword">Confirm Password</label>
-                            <div class="input-group">
-                                <i class="fas fa-lock"></i>
-                                <input type="password" id="confirmPassword" required>
-                            </div>
-                        </div>
-                        
-                        <button type="submit" class="btn btn-primary">Register</button>
-                        
-                        <p class="auth-switch">Already have an account? <a href="#" data-tab="login">Login</a></p>
-                    </form>
+                <div class="detail-actions">
+                    <button class="btn" id="reserveInModal">Reserve Now</button>
+                    <button class="btn" id="addToCartBtn" style="background-color: var(--secondary-color); color: var(--dark-color);">Add to Cart</button>
                 </div>
             </div>
         </div>
     </div>
+</div>
+<!-- Shop Reviews Section -->
+<section id="shop-reviews" class="shop-reviews">
+    <h2>Customer Reviews</h2>
+    
+    <div class="reviews-container" id="reviews-container">
+        <!-- Reviews will be loaded here -->
+    </div>
+    
+    <div class="add-review">
+        <h3>Leave Your Review</h3>
+        <div class="rating">
+            <span>Rating:</span>
+            <div class="stars">
+                <i class="far fa-star" data-rating="1"></i>
+                <i class="far fa-star" data-rating="2"></i>
+                <i class="far fa-star" data-rating="3"></i>
+                <i class="far fa-star" data-rating="4"></i>
+                <i class="far fa-star" data-rating="5"></i>
+            </div>
+            <span class="rating-text">0/5</span>
+        </div>
+        <textarea id="review-comment" placeholder="Share your experience..."></textarea>
+        <button id="submit-review" class="btn-primary">Submit Review</button>
+    </div>
+</section>
+<!-- Flash Sale Banner -->
+<section id="flash-sale" class="flash-sale-section">
+    <div id="flash-sale-container" class="container">
+        <!-- Flash sale content will be loaded here by JavaScript -->
+    </div>
+</section>
+    <script>
+        // Check if the user is logged in on page load
+        window.onload = function () {
+            const loggedInUser = localStorage.getItem("loggedInUser");
+            if (loggedInUser) {
+                enableAddToCartButtons();
+            }
+        };
+    
+        // Enable "Add to Cart" buttons
+        function enableAddToCartButtons() {
+            const addToCartButtons = document.querySelectorAll(".add-to-cart");
+            addToCartButtons.forEach((button) => {
+                button.disabled = false;
+            });
+        }
+    </script>
+    
+  
 
-    <script src="js/script.js"></script>
+    <!-- Footer Section -->
+    <footer class="footer">
+        <div class="footer-content">
+            <!-- Footer Links -->
+            <div class="footer-links">
+                <h3>Quick Links</h3>
+                <ul>
+                    <li><a href="#">Privacy Policy</a></li>
+                    <li><a href="#">Terms & Conditions</a></li>
+                    <li><a href="#">Return Policy</a></li>
+                </ul>
+            </div>
+
+            <!-- Social Media Icons -->
+            <section id="Contact" div class="social-media">
+                <h3>Follow Us</h3>
+                <div class="social-icons">
+                    <a href="https://www.facebook.com/share/1FMLtsgqFB/?mibextid=qi2Omg" class="social-icon"><i class="fab fa-facebook-f"></i></a>
+                    <a href="#" class="social-icon"><i class="fab fa-instagram"></i></a>
+                    <a href="#" class="social-icon"><i class="fab fa-tiktok"></i></a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer Bottom -->
+        <div class="footer-bottom">
+            <p>&copy; 2023 E-Shop. All rights reserved.</p>
+        </div>
+    </footer>
+
+
+    <script src="auth.js"></script>
+    <script src="script.js"></script>
+    <script src="shop-reviews.js"></script>
+    <script src="products.js"></script>
+    <script>
+        // Listen for product updates from admin
+        window.addEventListener('storage', function(e) {
+            if (e.key === 'products') {
+                loadProducts();
+            }
+        });
+    </script>
+
 </body>
 </html>
