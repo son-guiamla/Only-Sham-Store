@@ -1,6 +1,9 @@
 <?php
-session_start();
-$isLoggedIn = isset($_SESSION['username']);
+require_once 'includes/config.php';
+
+// Check if user is logged in
+$userLoggedIn = isset($_SESSION['user']);
+$adminLoggedIn = isset($_SESSION['admin']);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -9,7 +12,7 @@ $isLoggedIn = isset($_SESSION['username']);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>T-Shirts | Only@Sham</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
     <nav class="navbar">
@@ -21,6 +24,7 @@ $isLoggedIn = isset($_SESSION['username']);
         <!-- Menu Links -->
         <ul class="nav-links">
             <li><a href="index.php">Home</a></li>
+            <li><a href="#product-grid">Shop</a></li>
             <li><a href="cart.php">Reservations</a></li>
             <li><a href="#about-us">About Us</a></li>
             <li><a href="#Contact">Contact</a></li>
@@ -35,8 +39,8 @@ $isLoggedIn = isset($_SESSION['username']);
 
         <!-- Icons -->
         <div class="nav-icons">
-            <a href="cart.php" class="cart-icon"><i class="fas fa-shopping-cart"><sup><span id="cart-count">0</span></a></li></i></a>
-            <a href="profile.html" class="profile-icon"><i class="fas fa-user"></i></a>
+            <a href="cart.php" class="cart-icon"><i class="fas fa-shopping-cart"><sup><span id="cart-count">0</span></sup></i></a>
+            <a href="profile.php" class="profile-icon"><i class="fas fa-user"></i></a>
             <div class="settings-icon" onclick="toggleSidebar()">
                 <i class="fas fa-ellipsis-v"></i>
             </div>
@@ -45,21 +49,21 @@ $isLoggedIn = isset($_SESSION['username']);
         <!-- Sidebar -->
         <div class="sidebar" id="sidebar">
             <a href="#" class="close-btn" onclick="toggleSidebar()">&times;</a>
-            <?php if ($isLoggedIn): ?>
-                <a href="logout.php" id="login-logout-link">Logout</a>
+            <?php if ($userLoggedIn || $adminLoggedIn): ?>
+                <a href="#" onclick="logout()">Logout</a>
             <?php else: ?>
-                <a href="login.php" id="login-logout-link">Login</a>
+                <a href="login.php">Login</a>
             <?php endif; ?>
             <a href="#" class="sidebar-link settings-link">Settings</a>
             <a href="#" class="sidebar-link help-link">Help</a>
         </div>
     </nav>
-    
+
     <!-- Category Header -->
     <section class="category-header">
-        <div class="category-banner" style="background-image: url('assets/basta.jpg')">
+        <div class="category-banner" style="background-image: url('assets/tshirt-banner.jpg')">
             <h1>T-Shirts Collection</h1>
-            <p>Discover our premium selection of stylish t-shirts</p>
+            <p>Explore our premium selection of stylish and comfortable t-shirts.</p>
         </div>
     </section>
 
@@ -116,61 +120,88 @@ $isLoggedIn = isset($_SESSION['username']);
             </div>
 
             <!-- Social Media Icons -->
-            <section id="Contact" class="social-media">
+            <div class="social-media" id="Contact">
                 <h3>Follow Us</h3>
                 <div class="social-icons">
                     <a href="https://www.facebook.com/share/1FMLtsgqFB/?mibextid=qi2Omg" class="social-icon"><i class="fab fa-facebook-f"></i></a>
                     <a href="#" class="social-icon"><i class="fab fa-instagram"></i></a>
                     <a href="#" class="social-icon"><i class="fab fa-tiktok"></i></a>
                 </div>
-            </section>
+            </div>
         </div>
 
         <!-- Footer Bottom -->
         <div class="footer-bottom">
-            <p>&copy; 2023 E-Shop. All rights reserved.</p>
+            <p>&copy; 2025 Only@Sham. All rights reserved.</p>
         </div>
     </footer>
 
-    <script src="script.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Load t-shirts products
-            fetch('products.php?action=getByCategory&category_id=1') // Assuming 1 is the category ID for t-shirts
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('active');
+        }
+
+        function logout() {
+            fetch('includes/auth.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'action=logout'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.href = 'index.php';
+                }
+            });
+        }
+
+        // Check login status on page load
+        window.onload = function () {
+            <?php if ($userLoggedIn): ?>
+                enableAddToCartButtons();
+                updateCartCount();
+            <?php endif; ?>
+            // Load products for t-shirts category
+            loadProducts('t-shirts');
+        };
+
+        // Enable "Add to Cart" buttons
+        function enableAddToCartButtons() {
+            const addToCartButtons = document.querySelectorAll(".add-to-cart");
+            addToCartButtons.forEach((button) => {
+                button.disabled = false;
+            });
+        }
+
+        // Update cart count
+        function updateCartCount() {
+            fetch('includes/cart.php?action=get_cart')
                 .then(response => response.json())
                 .then(data => {
-                    if (data.success && data.products.length > 0) {
-                        const productGrid = document.getElementById('product-grid');
-                        data.products.forEach(product => {
-                            const productCard = document.createElement('div');
-                            productCard.className = 'product-card';
-                            productCard.innerHTML = `
-                                <div class="product-image-container">
-                                    <img src="${product.image || 'assets/default-product.jpg'}" alt="${product.name}" class="product-image">
-                                    ${product.discount ? '<div class="product-badge">Sale</div>' : ''}
-                                    <button class="quick-view-btn" onclick="openQuickView(${product.product_id})">Quick View</button>
-                                </div>
-                                <div class="product-info">
-                                    <h3 class="product-title">${product.name}</h3>
-                                    <div class="product-price">
-                                        ${product.original_price ? 
-                                            `<span class="original-price">₱${product.original_price.toFixed(2)}</span>
-                                             <span class="discounted-price">₱${product.price.toFixed(2)}</span>` : 
-                                            `₱${product.price.toFixed(2)}`}
-                                    </div>
-                                    <button class="add-to-cart" data-id="${product.product_id}">Add to Cart</button>
-                                </div>
-                            `;
-                            productGrid.appendChild(productCard);
-                        });
-                        // Reinitialize add to cart buttons
-                        if (typeof setupAddToCartButtons === 'function') {
-                            setupAddToCartButtons();
-                        }
+                    if (data.success) {
+                        const totalItems = data.data.filter(item => 
+                            !item.status || item.status === 'pending'
+                        ).reduce((sum, item) => sum + item.quantity, 0);
+                        document.getElementById('cart-count').textContent = totalItems;
                     }
-                })
-                .catch(error => console.error('Error loading products:', error));
+                });
+        }
+
+        // Handle storage events for product updates
+        window.addEventListener('storage', function(e) {
+            if (e.key === 'products_updated') {
+                loadProducts('t-shirts');
+            }
+        });
+
+        // Update cart count on DOM content loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            updateCartCount();
         });
     </script>
+    <script src="js/script.js"></script>
+    <script src="js/auth.js"></script>
 </body>
 </html>

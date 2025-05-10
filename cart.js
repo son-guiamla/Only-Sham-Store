@@ -1,323 +1,225 @@
-// Cart Page Script - Individual Confirmation Version
+/**
+ * Loads cart items from the backend and renders them with retry mechanism
+ */
+async function loadCartItems(retries = 3, delay = 1000) {
+    const cartItemsContainer = document.getElementById('cart-items');
+    if (!cartItemsContainer) return;
 
-// Global utility function
-function updateCartCount() {
-    const cartCountElements = document.querySelectorAll('#cart-count');
-    const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            const response = await fetch('includes/admin-api.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'get_cart' })
+            });
+            const result = await response.json();
+            if (!result.success) throw new Error(result.error || 'Failed to load cart');
 
-    if (!loggedInUser || !loggedInUser.cart) {
-        cartCountElements.forEach(element => {
-            element.textContent = '0';
-        });
+            const cartItems = result.data.cart || [];
+            renderCartItems(cartItems);
+            return; // Success, exit the retry loop
+        } catch (error) {
+            console.error(`Attempt ${attempt} - Error loading cart items:`, error);
+            if (attempt === retries) {
+                cartItemsContainer.innerHTML = `
+                    <div class="empty-cart">
+                        <i class="fas fa-shopping-cart"></i>
+                        <p>Error loading reservations. Please try again later.</p>
+                        <a href="index.php#shop" class="btn">Continue Shopping</a>
+                    </div>
+                `;
+                return;
+            }
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    }
+}
+
+/**
+ * Renders cart items and updates summary
+ * @param {Array} cartItems - Array of cart item objects
+ */
+function renderCartItems(cartItems) {
+    const cartItemsContainer = document.getElementById('cart-items');
+    if (!cartItemsContainer) return;
+
+    if (cartItems.length === 0) {
+        cartItemsContainer.innerHTML = `
+            <div class="empty-cart">
+                <i class="fas fa-shopping-cart"></i>
+                <p>Your reservation cart is empty</p>
+                <a href="index.php#shop" class="btn">Continue Shopping</a>
+            </div>
+        `;
+        updateCartSummary(0, 0, 0, 0);
         return;
     }
 
-    const activeItems = loggedInUser.cart.filter(
-        item => item.status !== 'picked'
-    ).reduce((sum, item) => sum + item.quantity, 0);
+    let totalItems = 0;
+    let pendingItems = 0;
+    let reservedItems = 0;
+    let totalValue = 0;
+    const baseUrl = 'http://localhost/onlyatsham/includes/';
 
-    cartCountElements.forEach(element => {
-        element.textContent = activeItems;
+    const html = cartItems.map(item => {
+        const imageSrc = item.image ? `${baseUrl}${item.image}` : `${baseUrl}assets/default-product.jpg`;
+
+        // Only count non-expired items in summary
+        if (item.status !== 'expired') {
+            totalItems += item.quantity;
+            totalValue += item.total_price;
+            if (item.status === 'pending') pendingItems += item.quantity;
+            if (item.status === 'confirmed') reservedItems += item.quantity;
+        }
+
+        const expiryDate = new Date(item.expiry);
+        let statusDisplay = item.status;
+        let statusClass = `status-${item.status}`;
+        let actions = '';
+
+        // Action buttons based on status
+        if (item.status === 'pending') {
+            actions = `
+                <button class="btn btn-confirm" data-id="${item.product_id}" data-size="${item.size}">Confirm</button>
+                <button class="btn btn-remove" data-id="${item.product_id}" data-size="${item.size}">Remove</button>
+            `;
+        } else if (item.status === 'confirmed') {
+            actions = `
+                <button class="btn btn-remove" data-id="${item.product_id}" data-size="${item.size}">Remove</button>
+            `;
+        }
+
+        let priceHtml = `Price: ₱${parseFloat(item.discounted_price).toFixed(2)}`;
+        let saleBadge = '';
+        if (item.discount_applied) {
+            priceHtml = `
+                Original: ₱${parseFloat(item.original_price).toFixed(2)}<br>
+                Discounted: ₱${parseFloat(item.discounted_price).toFixed(2)}
+            `;
+            saleBadge = `<span class="sale-badge">${item.discount_applied.name.replace(/^gb:/i, '')}: ${item.discount_applied.type === 'percentage' ? `${item.discount_applied.value}% OFF` : `₱${item.discount_applied.value} OFF`}</span>`;
+        }
+
+        return `
+            <div class="cart-item">
+                <img src="${imageSrc}" alt="${item.name}" class="cart-item-image">
+                <div class="cart-item-details">
+                    <h3>${item.name}</h3>
+                    <p>Size: ${item.size}</p>
+                    <p>Quantity: ${item.quantity}</p>
+                    <p>${priceHtml}</p>
+                    <p>Total: ₱${parseFloat(item.total_price).toFixed(2)}</p>
+                    <p>Status: <span class="${statusClass}">${statusDisplay}</span></p>
+                    ${item.expiry && item.status !== 'expired' ? `<p>Expires: ${expiryDate.toLocaleString()}</p>` : ''}
+                    ${saleBadge}
+                </div>
+                <div class="cart-item-actions">
+                    ${actions}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    cartItemsContainer.innerHTML = html;
+    updateCartSummary(totalItems, pendingItems, reservedItems, totalValue);
+
+    // Add event listeners for confirm and remove buttons
+    document.querySelectorAll('.btn-confirm').forEach(button => {
+        button.addEventListener('click', async () => {
+            const productId = button.getAttribute('data-id');
+            const size = button.getAttribute('data-size');
+            await confirmCartItem(productId, size);
+        });
+    });
+
+    document.querySelectorAll('.btn-remove').forEach(button => {
+        button.addEventListener('click', async () => {
+            const productId = button.getAttribute('data-id');
+            const size = button.getAttribute('data-size');
+            await removeFromCart(productId, size);
+        });
     });
 }
 
-function updateSummary(totalItems, pendingItems, reservedItems, totalAmount) {
+/**
+ * Updates the cart summary section
+ * @param {number} totalItems - Total number of non-expired items
+ * @param {number} pendingItems - Number of pending items
+ * @param {number} reservedItems - Number of reserved items
+ * @param {number} totalValue - Total value of non-expired items
+ */
+function updateCartSummary(totalItems, pendingItems, reservedItems, totalValue) {
     const summaryItems = document.getElementById('summary-items');
     const summaryPending = document.getElementById('summary-pending');
     const summaryReserved = document.getElementById('summary-reserved');
     const summaryTotal = document.getElementById('summary-total');
 
-    summaryItems.textContent = totalItems;
-    summaryPending.textContent = pendingItems;
-    summaryReserved.textContent = reservedItems;
-    summaryTotal.textContent = `₱${totalAmount.toFixed(2)}`;
+    if (summaryItems) summaryItems.textContent = totalItems;
+    if (summaryPending) summaryPending.textContent = pendingItems;
+    if (summaryReserved) summaryReserved.textContent = reservedItems;
+    if (summaryTotal) summaryTotal.textContent = `₱${parseFloat(totalValue).toFixed(2)}`;
 }
 
-function cancelCartItem(index, isPicked = false) {
-    if (!confirm('Are you sure you want to delete this item?')) {
-        return;
-    }
-
-    const users = JSON.parse(localStorage.getItem('users')) || [];
-    const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
-    const userIndex = users.findIndex(u => u.username === loggedInUser.username);
-
-    if (userIndex === -1) return;
-
-    if (isPicked) {
-        // Handle deleting picked items (order history)
-        users[userIndex].pickedItems.splice(index, 1);
-    } else {
-        // Handle canceling reservations
-        const item = users[userIndex].cart[index];
-        
-        // Update product stock if the item wasn't picked
-        if (item.status !== 'picked') {
-            const products = JSON.parse(localStorage.getItem('products')) || [];
-            const productIndex = products.findIndex(p => p.id === item.productId);
-            
-            if (productIndex !== -1 && products[productIndex].sizes) {
-                products[productIndex].sizes[item.size] += item.quantity;
-                localStorage.setItem('products', JSON.stringify(products));
-            }
-        }
-
-        // Remove the item from cart
-        users[userIndex].cart.splice(index, 1);
-    }
-
-    localStorage.setItem('users', JSON.stringify(users));
-    
-    // Update loggedInUser
-    const updatedUser = users[userIndex];
-    localStorage.setItem('loggedInUser', JSON.stringify(updatedUser));
-
-    loadCartItems();
-    updateCartCount();
-    
-    // Dispatch storage event to update admin interface
-    window.dispatchEvent(new Event('storage'));
-}
-
-function confirmCartItem(index) {
-    const users = JSON.parse(localStorage.getItem('users')) || [];
-    const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
-    const userIndex = users.findIndex(u => u.username === loggedInUser.username);
-
-    if (userIndex === -1) return;
-
-    const item = users[userIndex].cart[index];
-    
-    if (item.status && item.status !== 'pending') {
-        return; // Already confirmed
-    }
-
-    item.status = 'reserved';
-    item.reservedAt = new Date().toISOString();
-    
-    localStorage.setItem('users', JSON.stringify(users));
-    
-    // Update loggedInUser
-    const updatedUser = users[userIndex];
-    localStorage.setItem('loggedInUser', JSON.stringify(updatedUser));
-
-    alert(`Reservation confirmed for ${item.name}! You have 3 days to pick it up.`);
-    loadCartItems();
-    updateCartCount();
-    
-    // Dispatch storage event to update admin interface
-    window.dispatchEvent(new Event('storage'));
-}
-
-function cleanExpiredReservations() {
-    const users = JSON.parse(localStorage.getItem('users')) || [];
-    let updated = false;
-
-    users.forEach(user => {
-        if (user.cart && user.cart.length > 0) {
-            const now = new Date();
-            user.cart = user.cart.filter(item => {
-                if (item.status === 'picked') return true;
-                if (!item.reservedAt) return true;
-                
-                const expiryDate = new Date(item.reservedAt);
-                expiryDate.setDate(expiryDate.getDate() + 3);
-                return expiryDate > now;
-            });
-            updated = true;
-        }
-    });
-
-    if (updated) {
-        localStorage.setItem('users', JSON.stringify(users));
-        const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
-        if (loggedInUser) {
-            const updatedUser = users.find(u => u.username === loggedInUser.username);
-            if (updatedUser) {
-                localStorage.setItem('loggedInUser', JSON.stringify(updatedUser));
-            }
-        }
-    }
-}
-
-function loadCartItems() {
-    const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
-    const cartItemsContainer = document.getElementById('cart-items');
-    
-    if (!loggedInUser) {
-        window.location.href = 'login.html';
-        return;
-    }
-
-    const users = JSON.parse(localStorage.getItem('users')) || [];
-    const userIndex = users.findIndex(u => u.username === loggedInUser.username);
-
-    if (userIndex === -1) return;
-
-    const cartItems = users[userIndex].cart || [];
-    const pickedItems = users[userIndex].pickedItems || [];
-
-    if (cartItems.length === 0 && pickedItems.length === 0) {
-        cartItemsContainer.innerHTML = `
-            <div class="empty-cart">
-                <i class="fas fa-shopping-cart"></i>
-                <p>Your reservation cart is empty</p>
-                <a href="index.html#shop" class="btn">Continue Shopping</a>
-            </div>
-        `;
-        updateSummary(0, 0, 0, 0);
-        return;
-    }
-
-    let itemsHtml = '';
-    let totalItems = 0;
-    let pendingItems = 0;
-    let reservedItems = 0;
-    let totalAmount = 0;
-
-    // Current reservations
-    cartItems.forEach((item, index) => {
-        totalItems += item.quantity;
-        totalAmount += item.price * item.quantity;
-
-        let statusClass, statusText;
-        if (item.status === 'picked') {
-            statusClass = 'status-picked';
-            statusText = 'Picked Up';
-        } else if (item.status === 'reserved' || item.status === 'confirmed') {
-            statusClass = 'status-reserved';
-            statusText = 'Reserved';
-            reservedItems += item.quantity;
-            
-            const expiryDate = new Date(item.reservedAt);
-            expiryDate.setDate(expiryDate.getDate() + 3);
-            
-            const now = new Date();
-            const timeLeft = expiryDate - now;
-            const daysLeft = Math.ceil(timeLeft / (1000 * 60 * 60 * 24));
-            
-            if (daysLeft <= 0) {
-                statusClass = 'status-pending';
-                statusText = 'Expired';
-            }
-        } else {
-            statusClass = 'status-pending';
-            statusText = 'Pending';
-            pendingItems += item.quantity;
-        }
-
-        // Format expiry date with time
-        let expiryDisplay = '';
-        if (item.reservedAt && (item.status === 'reserved' || item.status === 'confirmed')) {
-            const expiryDate = new Date(item.reservedAt);
-            expiryDate.setDate(expiryDate.getDate() + 3);
-            expiryDisplay = expiryDate.toLocaleString('en-US', {
-                month: '2-digit',
-                day: '2-digit',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: true
-            });
-        }
-
-        itemsHtml += `
-            <div class="cart-item">
-                <img src="${item.image}" alt="${item.name}" class="cart-item-img">
-                <div class="cart-item-details">
-                    <h3 class="cart-item-title">${item.name}</h3>
-                    <p class="cart-item-price">₱${item.price.toFixed(2)}</p>
-                    <p class="cart-item-size">Size: ${item.size}</p>
-                    <p class="cart-item-quantity">Quantity: ${item.quantity}</p>
-                    <span class="cart-item-status ${statusClass}">${statusText}</span>
-                    ${(item.status === 'reserved' || item.status === 'confirmed') ? 
-                        `<p class="cart-item-expiry">Pick up before: ${expiryDisplay}</p>` : ''}
-                </div>
-                ${item.status !== 'picked' ? `
-                <div class="cart-item-actions">
-                    ${item.status !== 'reserved' && item.status !== 'confirmed' ? 
-                        `<button class="btn-confirm" data-index="${index}">
-                            <i class="fas fa-check"></i> Confirm
-                        </button>` : ''}
-                    <button class="btn-cancel" data-index="${index}" data-picked="false">
-                        <i class="fas fa-times"></i> Cancel
-                    </button>
-                </div>` : ''}
-            </div>
-        `;
-    });
-
-    // Picked items (order history)
-    if (pickedItems.length > 0) {
-        itemsHtml += `<h3 class="order-history-title">Order History</h3>`;
-        
-        pickedItems.forEach((item, index) => {
-            totalItems += item.quantity;
-            totalAmount += item.price * item.quantity;
-
-            // Format picked date with time
-            const pickedDate = item.pickedAt ? new Date(item.pickedAt).toLocaleString('en-US', {
-                month: '2-digit',
-                day: '2-digit',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: true
-            }) : 'N/A';
-
-            itemsHtml += `
-                <div class="cart-item">
-                    <img src="${item.image}" alt="${item.name}" class="cart-item-img">
-                    <div class="cart-item-details">
-                        <h3 class="cart-item-title">${item.name}</h3>
-                        <p class="cart-item-price">₱${item.price.toFixed(2)}</p>
-                        <p class="cart-item-size">Size: ${item.size}</p>
-                        <p class="cart-item-quantity">Quantity: ${item.quantity}</p>
-                        <span class="cart-item-status status-completed">Picked Up</span>
-                        <p class="cart-item-expiry">Picked on: ${pickedDate}</p>
-                    </div>
-                    <div class="cart-item-actions">
-                        <button class="btn-cancel" data-index="${index}" data-picked="true">
-                            <i class="fas fa-trash"></i> Delete
-                        </button>
-                    </div>
-                </div>
-            `;
+/**
+ * Confirms a cart item
+ * @param {string} productId - The ID of the product
+ * @param {string} size - The size of the product
+ */
+async function confirmCartItem(productId, size) {
+    try {
+        const response = await fetch('includes/admin-api.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'confirm_cart_item',
+                product_id: productId,
+                size: size
+            })
         });
+        const result = await response.json();
+        if (!result.success) throw new Error(result.error || 'Failed to confirm item');
+
+        alert('Item confirmed successfully!');
+        await loadCartItems();
+    } catch (error) {
+        console.error('Error confirming cart item:', error);
+        alert(error.message || 'An error occurred while confirming the item');
     }
-
-    cartItemsContainer.innerHTML = itemsHtml;
-    updateSummary(totalItems, pendingItems, reservedItems, totalAmount);
-
-    // Add event listeners to cancel buttons
-    document.querySelectorAll('.btn-cancel').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const isPicked = this.getAttribute('data-picked') === 'true';
-            cancelCartItem(parseInt(this.getAttribute('data-index')), isPicked);
-        });
-    });
-
-    // Add event listeners to confirm buttons
-    document.querySelectorAll('.btn-confirm').forEach(btn => {
-        btn.addEventListener('click', function() {
-            confirmCartItem(parseInt(this.getAttribute('data-index')));
-        });
-    });
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-    const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
-    
-    // Redirect to login if not logged in
-    if (!loggedInUser) {
-        window.location.href = 'login.html';
-        return;
+/**
+ * Removes an item from the cart
+ * @param {string} productId - The ID of the product
+ * @param {string} size - The size of the product
+ */
+async function removeFromCart(productId, size) {
+    try {
+        const response = await fetch('includes/admin-api.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'remove_from_cart',
+                product_id: productId,
+                size: size
+            })
+        });
+        const result = await response.json();
+        if (!result.success) throw new Error(result.error || 'Failed to remove item');
+
+        alert('Item removed successfully!');
+        await loadCartItems();
+    } catch (error) {
+        console.error('Error removing cart item:', error);
+        alert(error.message || 'An error occurred while removing the item');
     }
+}
 
-    loadCartItems();
-    updateCartCount();
-    setupLoginLogout();
-
-    // Clean up expired reservations periodically
-    setInterval(cleanExpiredReservations, 60000);
+/**
+ * Initializes the cart page
+ */
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        await loadCartItems();
+    } catch (error) {
+        console.error('Error initializing cart:', error);
+    }
 });

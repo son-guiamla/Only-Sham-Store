@@ -1,545 +1,273 @@
 <?php
-session_start();
+require_once __DIR__ . '/includes/config.php';
 
-// Handle AJAX requests
-if (isset($_GET['action'])) {
-    header('Content-Type: application/json');
-    
-    switch ($_GET['action']) {
-        case 'check_login':
-            echo json_encode(['loggedIn' => isset($_SESSION['loggedInUser'])]);
-            exit;
-            
-        case 'get_cart_count':
-            $count = 0;
-            if (isset($_SESSION['loggedInUser']) && isset($_SESSION['loggedInUser']['cart'])) {
-                foreach ($_SESSION['loggedInUser']['cart'] as $item) {
-                    if (!isset($item['status']) || $item['status'] !== 'picked') {
-                        $count += $item['quantity'];
-                    }
-                }
+header('Content-Type: application/json');
+
+$jsonInput = file_get_contents('php://input');
+$requestData = json_decode($jsonInput, true) ?: $_POST;
+$action = $requestData['action'] ?? $_GET['action'] ?? '';
+
+if (!isset($_SESSION['user']) && $action !== 'check_login') {
+    jsonResponse(false, [], 'User not logged in');
+    exit;
+}
+
+$user_id = $_SESSION['user']['id'] ?? null;
+
+// Function to check and update expired reservations
+function updateExpiredReservations($pdo) {
+    try {
+        $pdo->beginTransaction();
+
+        // Update expired reservations
+        $stmt = $pdo->prepare("UPDATE reservations 
+                              SET status = 'expired' 
+                              WHERE status IN ('pending', 'confirmed') 
+                              AND reserved_at < NOW() - INTERVAL 3 DAY 
+                              AND picked_at IS NULL");
+        $stmt->execute();
+
+        // Restore stock for newly expired reservations
+        $stmt = $pdo->query("SELECT r.product_id, r.size, r.quantity 
+                            FROM reservations r 
+                            WHERE r.status = 'expired' 
+                            AND r.picked_at IS NULL");
+        $expired = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($expired as $reservation) {
+            $stmt = $pdo->prepare("SELECT sizes FROM products WHERE id = ?");
+            $stmt->execute([$reservation['product_id']]);
+            $product = $stmt->fetch(PDO::FETCH_ASSOC);
+            $sizes = json_decode($product['sizes'], true) ?: [];
+
+            if (isset($sizes[$reservation['size']])) {
+                $sizes[$reservation['size']] += $reservation['quantity'];
+                $stmt = $pdo->prepare("UPDATE products SET sizes = ? WHERE id = ?");
+                $stmt->execute([json_encode($sizes), $reservation['product_id']]);
             }
-            echo json_encode(['count' => $count]);
-            exit;
-            
-        case 'get_cart':
-            if (!isset($_SESSION['loggedInUser'])) {
-                echo json_encode(['loggedIn' => false]);
-                exit;
-            }
-            
-            $response = [
-                'loggedIn' => true,
-                'cartItems' => $_SESSION['loggedInUser']['cart'] ?? [],
-                'pickedItems' => $_SESSION['loggedInUser']['pickedItems'] ?? []
-            ];
-            echo json_encode($response);
-            exit;
-            
-        case 'clean_expired':
-            $updated = false;
-            if (isset($_SESSION['loggedInUser']) && isset($_SESSION['loggedInUser']['cart'])) {
-                $now = new DateTime();
-                foreach ($_SESSION['loggedInUser']['cart'] as $key => $item) {
-                    if (isset($item['status']) && $item['status'] === 'reserved' && isset($item['reservedAt'])) {
-                        $expiryDate = new DateTime($item['reservedAt']);
-                        $expiryDate->modify('+3 days');
-                        if ($expiryDate < $now) {
-                            unset($_SESSION['loggedInUser']['cart'][$key]);
-                            $updated = true;
-                        }
-                    }
-                }
-                if ($updated) {
-                    $_SESSION['loggedInUser']['cart'] = array_values($_SESSION['loggedInUser']['cart']);
-                }
-            }
-            echo json_encode(['updated' => $updated]);
-            exit;
+        }
+
+        $pdo->commit();
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        throw $e;
     }
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
-    header('Content-Type: application/json');
-    
-    if (!isset($_SESSION['loggedInUser'])) {
-        echo json_encode(['success' => false, 'message' => 'Not logged in']);
-        exit;
-    }
-    
-    switch ($_POST['action']) {
-        case 'cancel_item':
-            $index = intval($_POST['index'] ?? -1);
-            $isPicked = filter_var($_POST['is_picked'] ?? false, FILTER_VALIDATE_BOOLEAN);
-            
-            if ($index === -1) {
-                echo json_encode(['success' => false, 'message' => 'Invalid index']);
-                exit;
-            }
-            
-            if ($isPicked) {
-                // Handle deleting picked items
-                if (isset($_SESSION['loggedInUser']['pickedItems']) && isset($_SESSION['loggedInUser']['pickedItems'][$index])) {
-                    array_splice($_SESSION['loggedInUser']['pickedItems'], $index, 1);
-                    echo json_encode(['success' => true]);
-                    exit;
-                }
+// Function to get discounted price
+function getDiscountedPrice($product, $pdo) {
+    $price = floatval($product['price']);
+    $discounted_price = $price;
+    $discount_applied = null;
+
+    $stmt = $pdo->query("SELECT * FROM flash_sales WHERE end_time > NOW()");
+    $flash_sales = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($flash_sales as $sale) {
+        $items = json_decode($sale['items'], true) ?: [];
+        $isIncluded = false;
+
+        if ($sale['scope'] === 'products') {
+            $isIncluded = in_array($product['id'], $items);
+        } elseif ($sale['scope'] === 'categories') {
+            $isIncluded = in_array($product['category'], $items);
+        }
+
+        if ($isIncluded) {
+            if ($sale['discount_type'] === 'percentage') {
+                $discounted_price = $price * (1 - ($sale['discount_value'] / 100));
             } else {
-                // Handle canceling reservations
-                if (isset($_SESSION['loggedInUser']['cart']) && isset($_SESSION['loggedInUser']['cart'][$index])) {
-                    $item = $_SESSION['loggedInUser']['cart'][$index];
-                    
-                    // Update product stock if the item wasn't picked
-                    if (!isset($item['status']) || $item['status'] !== 'picked') {
-                        if (isset($_SESSION['products'])) {
-                            foreach ($_SESSION['products'] as &$product) {
-                                if ($product['id'] === $item['productId']) {
-                                    $product['sizes'][$item['size']] += $item['quantity'];
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    
-                    // Remove the item from cart
-                    array_splice($_SESSION['loggedInUser']['cart'], $index, 1);
-                    echo json_encode(['success' => true]);
-                    exit;
-                }
+                $discounted_price = max(0, $price - $sale['discount_value']);
             }
-            
-            echo json_encode(['success' => false, 'message' => 'Item not found']);
-            exit;
-            
-        case 'confirm_item':
-            $index = intval($_POST['index'] ?? -1);
-            
-            if ($index === -1) {
-                echo json_encode(['success' => false, 'message' => 'Invalid index']);
-                exit;
-            }
-            
-            if (isset($_SESSION['loggedInUser']['cart']) && isset($_SESSION['loggedInUser']['cart'][$index])) {
-                $item = &$_SESSION['loggedInUser']['cart'][$index];
-                
-                if (isset($item['status']) && $item['status'] !== 'pending') {
-                    echo json_encode(['success' => false, 'message' => 'Item already confirmed']);
-                    exit;
-                }
-                
-                $item['status'] = 'reserved';
-                $item['reservedAt'] = date('c');
-                
-                echo json_encode([
-                    'success' => true,
-                    'itemName' => $item['name']
-                ]);
-                exit;
-            }
-            
-            echo json_encode(['success' => false, 'message' => 'Item not found']);
-            exit;
+            $discount_applied = [
+                'name' => $sale['name'],
+                'type' => $sale['discount_type'],
+                'value' => $sale['discount_value']
+            ];
+            break;
+        }
     }
+
+    return [
+        'original_price' => $price,
+        'discounted_price' => $discounted_price,
+        'discount_applied' => $discount_applied
+    ];
+}
+
+try {
+    // Update expired reservations before processing any action
+    updateExpiredReservations($pdo);
+
+    switch ($action) {
+        case 'add_to_cart':
+            $product_id = $requestData['product_id'] ?? null;
+            $size = $requestData['size'] ?? null;
+            $quantity = isset($requestData['quantity']) ? intval($requestData['quantity']) : 1;
+            $status = $requestData['status'] ?? 'pending';
+
+            if (!$product_id || !$size) {
+                jsonResponse(false, [], 'Product ID and size are required');
+            }
+
+            // Fetch product details
+            $stmt = $pdo->prepare("SELECT * FROM products WHERE id = ? AND deleted = 0");
+            $stmt->execute([$product_id]);
+            $product = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$product) {
+                jsonResponse(false, [], 'Product not found');
+            }
+
+            $sizes = json_decode($product['sizes'], true) ?: [];
+            if (!isset($sizes[$size]) || $sizes[$size] < $quantity) {
+                jsonResponse(false, [], 'Selected size is out of stock or insufficient quantity');
+            }
+
+            // Get discounted price
+            $priceInfo = getDiscountedPrice($product, $pdo);
+            $price = $priceInfo['discounted_price'];
+
+            $total_price = $price * $quantity;
+
+            $pdo->beginTransaction();
+
+            // Check for existing reservation
+            $stmt = $pdo->prepare("SELECT * FROM reservations 
+                                  WHERE user_id = ? AND product_id = ? AND size = ? AND status IN ('pending', 'confirmed')");
+            $stmt->execute([$user_id, $product_id, $size]);
+            $existing_item = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($existing_item) {
+                $new_quantity = $existing_item['quantity'] + $quantity;
+                if ($sizes[$size] < $new_quantity) {
+                    $pdo->rollBack();
+                    jsonResponse(false, [], "Only {$sizes[$size]} items left in stock for this size");
+                }
+                $new_total_price = $price * $new_quantity;
+                $stmt = $pdo->prepare("UPDATE reservations SET quantity = ?, total_price = ? WHERE id = ?");
+                $stmt->execute([$new_quantity, $new_total_price, $existing_item['id']]);
+            } else {
+                $stmt = $pdo->prepare("INSERT INTO reservations (user_id, product_id, size, quantity, total_price, status, reserved_at) 
+                                      VALUES (?, ?, ?, ?, ?, ?, NOW())");
+                $stmt->execute([$user_id, $product_id, $size, $quantity, $total_price, $status]);
+            }
+
+            // Update product stock
+            $sizes[$size] -= $quantity;
+            $stmt = $pdo->prepare("UPDATE products SET sizes = ? WHERE id = ?");
+            $stmt->execute([json_encode($sizes), $product_id]);
+
+            $pdo->commit();
+            jsonResponse(true, ['message' => 'Item added to cart']);
+            break;
+
+        case 'get_cart':
+            $stmt = $pdo->prepare("SELECT r.*, p.name AS product_name, p.image, p.price AS original_price 
+                                  FROM reservations r 
+                                  JOIN products p ON r.product_id = p.id 
+                                  WHERE r.user_id = ? AND r.status IN ('pending', 'confirmed', 'expired')");
+            $stmt->execute([$user_id]);
+            $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Add expiry date, discounted price, and format image path
+            foreach ($items as &$item) {
+                $reserved_at = new DateTime($item['reserved_at']);
+                $expiry_date = clone $reserved_at;
+                $expiry_date->modify('+3 days');
+                $item['expiry'] = $expiry_date->format('c');
+                $item['image'] = $item['image'] ? 'assets/' . basename($item['image']) : 'assets/default-product.jpg';
+
+                $stmt = $pdo->prepare("SELECT * FROM products WHERE id = ? AND deleted = 0");
+                $stmt->execute([$item['product_id']]);
+                $product = $stmt->fetch(PDO::FETCH_ASSOC);
+                if ($product) {
+                    $priceInfo = getDiscountedPrice($product, $pdo);
+                    $item['discounted_price'] = $priceInfo['discounted_price'];
+                    $item['discount_applied'] = $priceInfo['discount_applied'];
+                } else {
+                    $item['discounted_price'] = $item['original_price'];
+                    $item['discount_applied'] = null;
+                }
+            }
+
+            jsonResponse(true, ['data' => $items]);
+            break;
+
+        case 'remove_from_cart':
+            $item_id = $requestData['item_id'] ?? null;
+            if (!$item_id) {
+                jsonResponse(false, [], 'Item ID is required');
+            }
+
+            $stmt = $pdo->prepare("SELECT * FROM reservations WHERE id = ? AND user_id = ?");
+            $stmt->execute([$item_id, $user_id]);
+            $item = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$item) {
+                jsonResponse(false, [], 'Item not found');
+            }
+
+            if ($item['status'] === 'expired' || $item['status'] === 'picked') {
+                jsonResponse(false, [], 'Cannot remove expired or picked items');
+            }
+
+            $pdo->beginTransaction();
+
+            // Restore stock
+            $stmt = $pdo->prepare("SELECT sizes FROM products WHERE id = ?");
+            $stmt->execute([$item['product_id']]);
+            $sizes = json_decode($stmt->fetchColumn(), true) ?: [];
+            $sizes[$item['size']] = ($sizes[$item['size']] ?? 0) + $item['quantity'];
+            $stmt = $pdo->prepare("UPDATE products SET sizes = ? WHERE id = ?");
+            $stmt->execute([json_encode($sizes), $item['product_id']]);
+
+            // Delete reservation
+            $stmt = $pdo->prepare("DELETE FROM reservations WHERE id = ? AND user_id = ?");
+            $stmt->execute([$item_id, $user_id]);
+
+            $pdo->commit();
+            jsonResponse(true, ['message' => 'Item removed from cart']);
+            break;
+
+        case 'update_cart_item':
+            $item_id = $requestData['item_id'] ?? null;
+            $status = $requestData['status'] ?? null;
+
+            if (!$item_id || !$status) {
+                jsonResponse(false, [], 'Item ID and status are required');
+            }
+
+            if (!in_array($status, ['pending', 'confirmed'])) {
+                jsonResponse(false, [], 'Invalid status');
+            }
+
+            $stmt = $pdo->prepare("SELECT * FROM reservations WHERE id = ? AND user_id = ?");
+            $stmt->execute([$item_id, $user_id]);
+            $item = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$item) {
+                jsonResponse(false, [], 'Item not found');
+            }
+
+            if ($item['status'] === 'expired' || $item['status'] === 'picked') {
+                jsonResponse(false, [], 'Cannot update expired or picked items');
+            }
+
+            $stmt = $pdo->prepare("UPDATE reservations SET status = ?, reserved_at = COALESCE(reserved_at, NOW()) WHERE id = ? AND user_id = ?");
+            $stmt->execute([$status, $item_id, $user_id]);
+
+            jsonResponse(true, ['message' => 'Cart item updated']);
+            break;
+
+        default:
+            jsonResponse(false, [], 'Invalid action');
+            break;
+    }
+} catch (Exception $e) {
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+    jsonResponse(false, [], 'Error: ' . $e->getMessage());
 }
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reservations | Only@Sham</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <link rel="stylesheet" href="cart.css">
-</head>
-<body>
-    <nav class="navbar">
-        <!-- Logo -->
-        <div class="logo">
-            <a href="index.php">Only@Sham</a>
-        </div>
-
-        <!-- Menu Links -->
-        <ul class="nav-links">
-            <li><a href="index.php#home">Home</a></li>
-            <li><a href="index.php#shop">Shop</a></li>
-            <li><a href="cart.php" class="active">Reservations</a></li>
-            <li><a href="index.php#about-us">About Us</a></li>
-            <li><a href="index.php#Contact">Contact</a></li>
-        </ul>
-
-        <!-- Icons -->
-        <div class="nav-icons">
-            <a href="profile.php" class="profile-icon"><i class="fas fa-user"></i></a>
-            <div class="settings-icon" onclick="toggleSidebar()">
-                <i class="fas fa-ellipsis-v"></i>
-            </div>
-        </div>
-
-        <!-- Sidebar -->
-        <div class="sidebar" id="sidebar">
-            <a href="#" class="close-btn" onclick="toggleSidebar()">&times;</a>
-            <a href="#" id="login-logout-link">Login</a>
-            <a href="#" class="sidebar-link settings-link">Settings</a>
-            <a href="#" class="sidebar-link help-link">Help</a>
-        </div>
-    </nav>
-
-    <div class="cart-container">
-        <h1>Your Reservations</h1>
-        <div class="reservation-notice">
-            <i class="fas fa-info-circle"></i>
-            <p>You have <strong>3 days</strong> to pick up your reserved items. After 3 days, unclaimed reservations will be automatically canceled.</p>
-        </div>
-        
-        <div class="cart-items" id="cart-items">
-            <!-- Cart items will be loaded here by JavaScript -->
-            <div class="empty-cart">
-                <i class="fas fa-shopping-cart"></i>
-                <p>Your reservation cart is empty</p>
-                <a href="index.php#shop" class="btn">Continue Shopping</a>
-            </div>
-        </div>
-        
-        <div class="cart-summary">
-            <div class="summary-card">
-                <h3>Reservation Summary</h3>
-                <div class="summary-row">
-                    <span>Items:</span>
-                    <span id="summary-items">0</span>
-                </div>
-                <div class="summary-row">
-                    <span>Pending Items:</span>
-                    <span id="summary-pending">0</span>
-                </div>
-                <div class="summary-row">
-                    <span>Reserved Items:</span>
-                    <span id="summary-reserved">0</span>
-                </div>
-                <div class="summary-row highlight">
-                    <span>Total Value:</span>
-                    <span id="summary-total">₱0.00</span>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <footer class="footer">
-        <div class="footer-content">
-            <!-- Footer Links -->
-            <div class="footer-links">
-                <h3>Quick Links</h3>
-                <ul>
-                    <li><a href="#">Privacy Policy</a></li>
-                    <li><a href="#">Terms & Conditions</a></li>
-                    <li><a href="#">Return Policy</a></li>
-                </ul>
-            </div>
-
-            <!-- Social Media Icons -->
-            <div class="social-media">
-                <h3>Follow Us</h3>
-                <div class="social-icons">
-                    <a href="#" class="social-icon"><i class="fab fa-facebook-f"></i></a>
-                    <a href="#" class="social-icon"><i class="fab fa-instagram"></i></a>
-                    <a href="#" class="social-icon"><i class="fab fa-tiktok"></i></a>
-                </div>
-            </div>
-        </div>
-
-        <!-- Footer Bottom -->
-        <div class="footer-bottom">
-            <p>&copy; 2023 Only@Sham. All rights reserved.</p>
-        </div>
-    </footer>
-
-    <script src="script.js"></script>
-    <script>
-        // Cart Page Script - AJAX Version
-
-        // Global utility function
-        function updateCartCount() {
-            const cartCountElements = document.querySelectorAll('#cart-count');
-            
-            fetch('cart.php?action=get_cart_count')
-                .then(response => response.json())
-                .then(data => {
-                    cartCountElements.forEach(element => {
-                        element.textContent = data.count || '0';
-                    });
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    cartCountElements.forEach(element => {
-                        element.textContent = '0';
-                    });
-                });
-        }
-
-        function updateSummary(totalItems, pendingItems, reservedItems, totalAmount) {
-            const summaryItems = document.getElementById('summary-items');
-            const summaryPending = document.getElementById('summary-pending');
-            const summaryReserved = document.getElementById('summary-reserved');
-            const summaryTotal = document.getElementById('summary-total');
-
-            summaryItems.textContent = totalItems;
-            summaryPending.textContent = pendingItems;
-            summaryReserved.textContent = reservedItems;
-            summaryTotal.textContent = `₱${totalAmount.toFixed(2)}`;
-        }
-
-        function cancelCartItem(index, isPicked = false) {
-            if (!confirm('Are you sure you want to delete this item?')) {
-                return;
-            }
-
-            const formData = new FormData();
-            formData.append('action', 'cancel_item');
-            formData.append('index', index);
-            formData.append('is_picked', isPicked);
-
-            fetch('cart.php', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    loadCartItems();
-                    updateCartCount();
-                } else {
-                    alert(data.message || 'Failed to cancel item');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred while canceling the item');
-            });
-        }
-
-        function confirmCartItem(index) {
-            const formData = new FormData();
-            formData.append('action', 'confirm_item');
-            formData.append('index', index);
-
-            fetch('cart.php', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert(`Reservation confirmed for ${data.itemName}! You have 3 days to pick it up.`);
-                    loadCartItems();
-                    updateCartCount();
-                } else {
-                    alert(data.message || 'Failed to confirm reservation');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred while confirming the reservation');
-            });
-        }
-
-        function cleanExpiredReservations() {
-            fetch('cart.php?action=clean_expired')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.updated) {
-                        loadCartItems();
-                    }
-                })
-                .catch(error => {
-                    console.error('Error cleaning expired reservations:', error);
-                });
-        }
-
-        function loadCartItems() {
-            fetch('cart.php?action=get_cart')
-                .then(response => response.json())
-                .then(data => {
-                    const cartItemsContainer = document.getElementById('cart-items');
-                    
-                    if (!data.loggedIn) {
-                        window.location.href = 'login.php';
-                        return;
-                    }
-
-                    if (data.cartItems.length === 0 && data.pickedItems.length === 0) {
-                        cartItemsContainer.innerHTML = `
-                            <div class="empty-cart">
-                                <i class="fas fa-shopping-cart"></i>
-                                <p>Your reservation cart is empty</p>
-                                <a href="index.php#shop" class="btn">Continue Shopping</a>
-                            </div>
-                        `;
-                        updateSummary(0, 0, 0, 0);
-                        return;
-                    }
-
-                    let itemsHtml = '';
-                    let totalItems = 0;
-                    let pendingItems = 0;
-                    let reservedItems = 0;
-                    let totalAmount = 0;
-
-                    // Current reservations
-                    data.cartItems.forEach((item, index) => {
-                        totalItems += item.quantity;
-                        totalAmount += item.price * item.quantity;
-
-                        let statusClass, statusText;
-                        if (item.status === 'picked') {
-                            statusClass = 'status-picked';
-                            statusText = 'Picked Up';
-                        } else if (item.status === 'reserved' || item.status === 'confirmed') {
-                            statusClass = 'status-reserved';
-                            statusText = 'Reserved';
-                            reservedItems += item.quantity;
-                            
-                            const expiryDate = new Date(item.reservedAt);
-                            expiryDate.setDate(expiryDate.getDate() + 3);
-                            
-                            const now = new Date();
-                            const timeLeft = expiryDate - now;
-                            const daysLeft = Math.ceil(timeLeft / (1000 * 60 * 60 * 24));
-                            
-                            if (daysLeft <= 0) {
-                                statusClass = 'status-pending';
-                                statusText = 'Expired';
-                            }
-                        } else {
-                            statusClass = 'status-pending';
-                            statusText = 'Pending';
-                            pendingItems += item.quantity;
-                        }
-
-                        // Format expiry date with time
-                        let expiryDisplay = '';
-                        if (item.reservedAt && (item.status === 'reserved' || item.status === 'confirmed')) {
-                            const expiryDate = new Date(item.reservedAt);
-                            expiryDate.setDate(expiryDate.getDate() + 3);
-                            expiryDisplay = expiryDate.toLocaleString('en-US', {
-                                month: '2-digit',
-                                day: '2-digit',
-                                year: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                                hour12: true
-                            });
-                        }
-
-                        itemsHtml += `
-                            <div class="cart-item">
-                                <img src="${item.image}" alt="${item.name}" class="cart-item-img">
-                                <div class="cart-item-details">
-                                    <h3 class="cart-item-title">${item.name}</h3>
-                                    <p class="cart-item-price">₱${item.price.toFixed(2)}</p>
-                                    <p class="cart-item-size">Size: ${item.size}</p>
-                                    <p class="cart-item-quantity">Quantity: ${item.quantity}</p>
-                                    <span class="cart-item-status ${statusClass}">${statusText}</span>
-                                    ${(item.status === 'reserved' || item.status === 'confirmed') ? 
-                                        `<p class="cart-item-expiry">Pick up before: ${expiryDisplay}</p>` : ''}
-                                </div>
-                                ${item.status !== 'picked' ? `
-                                <div class="cart-item-actions">
-                                    ${item.status !== 'reserved' && item.status !== 'confirmed' ? 
-                                        `<button class="btn-confirm" data-index="${index}">
-                                            <i class="fas fa-check"></i> Confirm
-                                        </button>` : ''}
-                                    <button class="btn-cancel" data-index="${index}" data-picked="false">
-                                        <i class="fas fa-times"></i> Cancel
-                                    </button>
-                                </div>` : ''}
-                            </div>
-                        `;
-                    });
-
-                    // Picked items (order history)
-                    if (data.pickedItems.length > 0) {
-                        itemsHtml += `<h3 class="order-history-title">Order History</h3>`;
-                        
-                        data.pickedItems.forEach((item, index) => {
-                            totalItems += item.quantity;
-                            totalAmount += item.price * item.quantity;
-
-                            // Format picked date with time
-                            const pickedDate = item.pickedAt ? new Date(item.pickedAt).toLocaleString('en-US', {
-                                month: '2-digit',
-                                day: '2-digit',
-                                year: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                                hour12: true
-                            }) : 'N/A';
-
-                            itemsHtml += `
-                                <div class="cart-item">
-                                    <img src="${item.image}" alt="${item.name}" class="cart-item-img">
-                                    <div class="cart-item-details">
-                                        <h3 class="cart-item-title">${item.name}</h3>
-                                        <p class="cart-item-price">₱${item.price.toFixed(2)}</p>
-                                        <p class="cart-item-size">Size: ${item.size}</p>
-                                        <p class="cart-item-quantity">Quantity: ${item.quantity}</p>
-                                        <span class="cart-item-status status-completed">Picked Up</span>
-                                        <p class="cart-item-expiry">Picked on: ${pickedDate}</p>
-                                    </div>
-                                    <div class="cart-item-actions">
-                                        <button class="btn-cancel" data-index="${index}" data-picked="true">
-                                            <i class="fas fa-trash"></i> Delete
-                                        </button>
-                                    </div>
-                                </div>
-                            `;
-                        });
-                    }
-
-                    cartItemsContainer.innerHTML = itemsHtml;
-                    updateSummary(totalItems, pendingItems, reservedItems, totalAmount);
-
-                    // Add event listeners to cancel buttons
-                    document.querySelectorAll('.btn-cancel').forEach(btn => {
-                        btn.addEventListener('click', function() {
-                            const isPicked = this.getAttribute('data-picked') === 'true';
-                            cancelCartItem(parseInt(this.getAttribute('data-index')), isPicked);
-                        });
-                    });
-
-                    // Add event listeners to confirm buttons
-                    document.querySelectorAll('.btn-confirm').forEach(btn => {
-                        btn.addEventListener('click', function() {
-                            confirmCartItem(parseInt(this.getAttribute('data-index')));
-                        });
-                    });
-                })
-                .catch(error => {
-                    console.error('Error loading cart items:', error);
-                });
-        }
-
-        document.addEventListener('DOMContentLoaded', function() {
-            // Check login status first
-            fetch('cart.php?action=check_login')
-                .then(response => response.json())
-                .then(data => {
-                    if (!data.loggedIn) {
-                        window.location.href = 'login.php';
-                        return;
-                    }
-                    
-                    loadCartItems();
-                    updateCartCount();
-                    setupLoginLogout();
-
-                    // Clean up expired reservations periodically
-                    setInterval(cleanExpiredReservations, 60000);
-                })
-                .catch(error => {
-                    console.error('Error checking login status:', error);
-                    window.location.href = 'login.php';
-                });
-        });
-    </script>
-    <script src="script.js"></script>
-</body>
-</html>
